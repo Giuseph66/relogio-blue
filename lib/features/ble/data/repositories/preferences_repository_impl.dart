@@ -44,6 +44,7 @@ class PreferencesRepositoryImpl implements PreferencesRepository {
               backgroundNotifyOnRx: settings.backgroundNotifyOnRx,
               backgroundServiceTitle: settings.backgroundServiceTitle,
               backgroundServiceText: settings.backgroundServiceText,
+              serverApiUrl: settings.serverApiUrl,
             );
 
       final success = await _dataSource.saveSettings(model);
@@ -92,4 +93,3 @@ class PreferencesRepositoryImpl implements PreferencesRepository {
     }
   }
 }
-

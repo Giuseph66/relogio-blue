@@ -19,69 +19,69 @@ class AppRoutes {
   static const String tela2 = '/tela2';
   static const String tela3 = '/tela3';
 
-  static Route<dynamic> generateRoute(RouteSettings settings) {
-    final routeName = settings.name ?? home;
+  static Route<dynamic> generateRoute(RouteSettings routeSettings) {
+    final routeName = routeSettings.name ?? home;
     
     if (routeName == home || routeName == dashboard) {
       return MaterialPageRoute(
         builder: (_) => const DashboardPage(),
-        settings: settings,
+        settings: routeSettings,
       );
     }
     
     if (routeName == connect) {
       return MaterialPageRoute(
         builder: (_) => const ConnectDevicePage(),
-        settings: settings,
+        settings: routeSettings,
       );
     }
     
     if (routeName == messages) {
       return MaterialPageRoute(
         builder: (_) => const MessagesPage(),
-        settings: settings,
+        settings: routeSettings,
       );
     }
     
-    if (routeName == settings) {
+    if (routeName == AppRoutes.settings) {
       return MaterialPageRoute(
         builder: (_) => const SettingsPage(),
-        settings: settings,
+        settings: routeSettings,
       );
     }
     
     if (routeName == about) {
       return MaterialPageRoute(
         builder: (_) => const AboutPage(),
-        settings: settings,
+        settings: routeSettings,
       );
     }
     
     if (routeName == tela1) {
       return MaterialPageRoute(
         builder: (_) => const Tela1Page(),
-        settings: settings,
+        settings: routeSettings,
       );
     }
     
     if (routeName == tela2) {
       return MaterialPageRoute(
         builder: (_) => const Tela2Page(),
-        settings: settings,
+        settings: routeSettings,
       );
     }
     
     if (routeName == tela3) {
       return MaterialPageRoute(
         builder: (_) => const Tela3Page(),
-        settings: settings,
+        settings: routeSettings,
       );
     }
     
     return MaterialPageRoute(
       builder: (_) => Scaffold(
         body: Center(
-          child: Text('Rota não encontrada: ${settings.name}'),
+          child: Text('Rota não encontrada: ${routeSettings.name}'),
         ),
       ),
     );

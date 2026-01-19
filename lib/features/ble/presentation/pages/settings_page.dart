@@ -21,6 +21,7 @@ class _SettingsPageState extends State<SettingsPage> {
   final _deviceIdController = TextEditingController();
   final _backgroundServiceTitleController = TextEditingController();
   final _backgroundServiceTextController = TextEditingController();
+  final _serverApiUrlController = TextEditingController();
   bool _autoReconnect = false;
   bool _enableMockMode = false;
   bool _keepBleAliveInBackground = true;
@@ -49,6 +50,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _backgroundNotifyOnRx = settings.backgroundNotifyOnRx;
       _backgroundServiceTitleController.text = settings.backgroundServiceTitle ?? '';
       _backgroundServiceTextController.text = settings.backgroundServiceText ?? '';
+      _serverApiUrlController.text = settings.serverApiUrl;
       _connectionMode = settings.connectionMode;
     });
   }
@@ -62,6 +64,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _deviceIdController.dispose();
     _backgroundServiceTitleController.dispose();
     _backgroundServiceTextController.dispose();
+    _serverApiUrlController.dispose();
     super.dispose();
   }
 
@@ -183,6 +186,22 @@ class _SettingsPageState extends State<SettingsPage> {
                 required: false,
                 hint: 'Ex: Conectado e recebendo mensagens',
               ),
+              const SizedBox(height: 30),
+              const Text(
+                'Servidor de Mensagens',
+                style: TextStyle(
+                  fontSize: 20,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 20),
+              _buildTextField(
+                'URL do Servidor (opcional)',
+                _serverApiUrlController,
+                required: false,
+                hint: 'Ex: http://192.168.0.10:3001',
+              ),
               const SizedBox(height: 40),
               SizedBox(
                 width: double.infinity,
@@ -251,6 +270,7 @@ class _SettingsPageState extends State<SettingsPage> {
       backgroundServiceText: _backgroundServiceTextController.text.trim().isEmpty
           ? null
           : _backgroundServiceTextController.text.trim(),
+      serverApiUrl: _serverApiUrlController.text.trim(),
     );
 
     final result = await _di.saveSettings(settings);

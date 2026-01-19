@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BLE Live Messages</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      body {
+        margin: 0;
+        font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top, #fef6e4, #f2e5d7);
+        color: #1f1b16;
+      }
+      header {
+        padding: 24px;
+        background: #1f1b16;
+        color: #fef6e4;
+        text-align: center;
+        letter-spacing: 1px;
+      }
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: bold;
+        margin-bottom: 16px;
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #d64545;
+      }
+      .dot.online {
+        background: #2ecc71;
+      }
+      .messages {
+        display: grid;
+        gap: 12px;
+      }
+      .message {
+        padding: 12px 16px;
+        border-radius: 12px;
+        background: #ffffff;
+        box-shadow: 0 10px 20px rgba(31, 27, 22, 0.08);
+      }
+      .message header {
+        all: unset;
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: #665c54;
+      }
+      .message p {
+        margin: 8px 0 0;
+        font-size: 16px;
+        white-space: pre-wrap;
+      }
+      .empty {
+        padding: 24px;
+        border: 2px dashed #d3c6b8;
+        border-radius: 12px;
+        text-align: center;
+        color: #7a6f66;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Relogio BLE - Mensagens</h1>
+      <p>Fluxo em tempo real do relogio para a tela</p>
+    </header>
+    <main>
+      <div class="status">
+        <span class="dot" id="status-dot"></span>
+        <span id="status-text">Conectando...</span>
+      </div>
+      <div class="messages" id="messages"></div>
+      <div class="empty" id="empty">Nenhuma mensagem recebida ainda.</div>
+    </main>
+    <script>
+      const messagesEl = document.getElementById("messages");
+      const emptyEl = document.getElementById("empty");
+      const statusDot = document.getElementById("status-dot");
+      const statusText = document.getElementById("status-text");
+
+      function formatTime(iso) {
+        const date = new Date(iso);
+        return date.toLocaleTimeString("pt-BR");
+      }
+
+      function renderMessage(message, prepend = true) {
+        const card = document.createElement("article");
+        card.className = "message";
+        card.innerHTML = `
+          <header>
+            <span>${message.deviceName || message.deviceId || "Relogio BLE"}</span>
+            <span>${formatTime(message.timestamp || message.receivedAt)}</span>
+          </header>
+          <p>${message.content}</p>
+        `;
+        if (prepend) {
+          messagesEl.prepend(card);
+        } else {
+          messagesEl.append(card);
+        }
+      }
+
+      function renderInitial(messages) {
+        messagesEl.innerHTML = "";
+        if (!messages.length) {
+          emptyEl.style.display = "block";
+          return;
+        }
+        emptyEl.style.display = "none";
+        messages.slice().reverse().forEach((msg) => renderMessage(msg, false));
+      }
+
+      async function loadMessages() {
+        try {
+          const response = await fetch("/api/messages");
+          const data = await response.json();
+          renderInitial(data.messages || []);
+        } catch (error) {
+          statusText.textContent = "Falha ao carregar mensagens";
+        }
+      }
+
+      function setStatus(online) {
+        statusDot.classList.toggle("online", online);
+        statusText.textContent = online ? "Online" : "Offline";
+      }
+
+      loadMessages();
+
+      const source = new EventSource("/events");
+      source.addEventListener("init", (event) => {
+        const data = JSON.parse(event.data || "[]");
+        renderInitial(data);
+        setStatus(true);
+      });
+      source.addEventListener("message", (event) => {
+        const message = JSON.parse(event.data || "{}");
+        if (message.content) {
+          emptyEl.style.display = "none";
+          renderMessage(message);
+        }
+      });
+      source.addEventListener("error", () => {
+        setStatus(false);
+      });
+    </script>
+  </body>
+</html>

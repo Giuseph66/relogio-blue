@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/widgets/app_drawer.dart';
+import '../../../../core/routes/app_routes.dart';
 import '../controllers/messages_controller.dart';
 import '../controllers/ble_controller.dart';
 import '../../domain/entities/ble_message.dart';
@@ -31,7 +32,6 @@ class _MessagesPageState extends State<MessagesPage> {
 
   @override
   void dispose() {
-    _messagesController.dispose();
     _bleController.dispose();
     _messageController.dispose();
     _scrollController.dispose();
@@ -45,27 +45,17 @@ class _MessagesPageState extends State<MessagesPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mensagens'),
+        actions: [
+          IconButton(
+            tooltip: 'Configurações',
+            icon: const Icon(Icons.settings),
+            onPressed: () => Navigator.pushNamed(context, AppRoutes.settings),
+          ),
+        ],
       ),
       drawer: const AppDrawer(),
       body: Column(
         children: [
-          if (!isConnected)
-            Container(
-              padding: const EdgeInsets.all(16),
-              color: Colors.orange.withOpacity(0.3),
-              child: const Row(
-                children: [
-                  Icon(Icons.warning, color: Colors.orange),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Conecte-se a um dispositivo primeiro',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           StreamBuilder<TickStatus>(
             stream: _messagesController.tickStatus,
             initialData: const TickStatus(),

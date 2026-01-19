@@ -69,7 +69,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _bleController.dispose();
-    _messagesController.dispose();
     super.dispose();
   }
 
@@ -103,6 +102,13 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     return Scaffold(
       appBar: AppBar(
         title: const Text('Dashboard'),
+        actions: [
+          IconButton(
+            tooltip: 'Configurações',
+            icon: const Icon(Icons.settings),
+            onPressed: () => Navigator.pushNamed(context, AppRoutes.settings),
+          ),
+        ],
       ),
       drawer: const AppDrawer(),
       body: SingleChildScrollView(

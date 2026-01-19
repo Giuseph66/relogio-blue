@@ -16,6 +16,7 @@ class BleSettingsModel extends BleSettings {
     super.backgroundNotifyOnRx,
     super.backgroundServiceTitle,
     super.backgroundServiceText,
+    super.serverApiUrl,
   });
 
   factory BleSettingsModel.defaults() {
@@ -28,6 +29,7 @@ class BleSettingsModel extends BleSettings {
       enableMockMode: false,
       keepBleAliveInBackground: true,
       backgroundNotifyOnRx: true,
+      serverApiUrl: '',
     );
   }
 
@@ -48,6 +50,7 @@ class BleSettingsModel extends BleSettings {
       backgroundNotifyOnRx: json['backgroundNotifyOnRx'] as bool? ?? true,
       backgroundServiceTitle: json['backgroundServiceTitle'] as String?,
       backgroundServiceText: json['backgroundServiceText'] as String?,
+      serverApiUrl: json['serverApiUrl'] as String? ?? '',
     );
   }
 
@@ -65,6 +68,7 @@ class BleSettingsModel extends BleSettings {
       'backgroundNotifyOnRx': backgroundNotifyOnRx,
       'backgroundServiceTitle': backgroundServiceTitle,
       'backgroundServiceText': backgroundServiceText,
+      'serverApiUrl': serverApiUrl,
     };
   }
 
@@ -82,6 +86,7 @@ class BleSettingsModel extends BleSettings {
     bool? backgroundNotifyOnRx,
     String? backgroundServiceTitle,
     String? backgroundServiceText,
+    String? serverApiUrl,
   }) {
     return BleSettingsModel(
       connectionMode: connectionMode ?? this.connectionMode,
@@ -96,6 +101,7 @@ class BleSettingsModel extends BleSettings {
       backgroundNotifyOnRx: backgroundNotifyOnRx ?? this.backgroundNotifyOnRx,
       backgroundServiceTitle: backgroundServiceTitle ?? this.backgroundServiceTitle,
       backgroundServiceText: backgroundServiceText ?? this.backgroundServiceText,
+      serverApiUrl: serverApiUrl ?? this.serverApiUrl,
     );
   }
 }

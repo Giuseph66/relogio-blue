@@ -4,15 +4,25 @@ import 'package:flutter/widgets.dart';
 import '../../../../core/di/dependency_injection.dart';
 import '../../../../core/background/ble_foreground_service.dart';
 import '../../../../core/notifications/notification_service.dart';
+import '../../../../core/network/ble_message_relay.dart';
 import '../../domain/entities/ble_message.dart';
 import '../../domain/usecases/load_settings.dart';
 import '../../data/models/ble_message_model.dart' as model;
 
 /// Controller for BLE messages
 class MessagesController {
+  static final MessagesController _instance = MessagesController._internal();
+  factory MessagesController() => _instance;
+  MessagesController._internal() {
+    _loadSettings = LoadSettings(_di.preferencesRepository);
+    _startListening();
+    _startTickMonitor();
+  }
+
   final DependencyInjection _di = DependencyInjection();
   final BleForegroundServiceManager _foregroundService = BleForegroundServiceManager();
   final NotificationService _notificationService = NotificationService();
+  final BleMessageRelayService _messageRelay = BleMessageRelayService();
   late final LoadSettings _loadSettings;
 
   final _messagesController = StreamController<List<BleMessage>>.broadcast();
@@ -26,12 +36,6 @@ class MessagesController {
   Timer? _tickTimer;
   TickStatus _lastTickStatus = const TickStatus();
   AppLifecycleState? _appLifecycleState;
-
-  MessagesController() {
-    _loadSettings = LoadSettings(_di.preferencesRepository);
-    _startListening();
-    _startTickMonitor();
-  }
 
   /// Start listening to messages
   void _startListening() {
@@ -136,10 +140,7 @@ class MessagesController {
 
   /// Dispose
   void dispose() {
-    _subscribeSubscription?.cancel();
-    _tickTimer?.cancel();
-    _messagesController.close();
-    _tickStatusController.close();
+    // Singleton: keep streams alive for the app lifetime.
   }
 
   bool _tryUpdateTickFromData(List<int> data) {
@@ -221,6 +222,15 @@ class MessagesController {
           lifecycleState == AppLifecycleState.inactive ||
           lifecycleState == AppLifecycleState.hidden;
       final shouldNotify = isInBackground || settings.backgroundNotifyOnRx;
+
+      final serverUrl = settings.serverApiUrl.trim();
+      if (serverUrl.isNotEmpty) {
+        await _messageRelay.sendRxMessage(
+          baseUrl: serverUrl,
+          content: content,
+          deviceId: _di.bleRepository.getConnectedDeviceId(),
+        );
+      }
 
       if (!shouldNotify) return;
 

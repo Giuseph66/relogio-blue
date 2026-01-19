@@ -71,6 +71,13 @@ class _ConnectDevicePageState extends State<ConnectDevicePage> with WidgetsBindi
     return Scaffold(
       appBar: AppBar(
         title: const Text('Conectar Dispositivo'),
+        actions: [
+          IconButton(
+            tooltip: 'Configurações',
+            icon: const Icon(Icons.settings),
+            onPressed: () => Navigator.pushNamed(context, AppRoutes.settings),
+          ),
+        ],
       ),
       drawer: const AppDrawer(),
       body: Column(

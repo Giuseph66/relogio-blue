@@ -17,6 +17,7 @@ class BleSettings {
   final bool backgroundNotifyOnRx;
   final String? backgroundServiceTitle;
   final String? backgroundServiceText;
+  final String serverApiUrl;
 
   const BleSettings({
     this.connectionMode = ConnectionMode.ble,
@@ -31,6 +32,7 @@ class BleSettings {
     this.backgroundNotifyOnRx = true,
     this.backgroundServiceTitle,
     this.backgroundServiceText,
+    this.serverApiUrl = '',
   });
 
   BleSettings copyWith({
@@ -46,6 +48,7 @@ class BleSettings {
     bool? backgroundNotifyOnRx,
     String? backgroundServiceTitle,
     String? backgroundServiceText,
+    String? serverApiUrl,
   }) {
     return BleSettings(
       connectionMode: connectionMode ?? this.connectionMode,
@@ -60,6 +63,7 @@ class BleSettings {
       backgroundNotifyOnRx: backgroundNotifyOnRx ?? this.backgroundNotifyOnRx,
       backgroundServiceTitle: backgroundServiceTitle ?? this.backgroundServiceTitle,
       backgroundServiceText: backgroundServiceText ?? this.backgroundServiceText,
+      serverApiUrl: serverApiUrl ?? this.serverApiUrl,
     );
   }
 

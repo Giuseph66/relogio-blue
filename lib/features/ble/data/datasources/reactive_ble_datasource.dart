@@ -203,6 +203,13 @@ class ReactiveBleDataSource {
       return;
     }
 
+    if (_notifySubscription != null) {
+      AppLogger.debug('Já inscrito em notificações BLE');
+      return;
+    }
+
+    _notifyController ??= StreamController<List<int>>.broadcast();
+
     try {
       final characteristic = QualifiedCharacteristic(
         serviceId: Uuid.parse(settings.serviceUuid),
@@ -226,6 +233,9 @@ class ReactiveBleDataSource {
 
   /// Start mock notifications
   void _startMockNotifications() {
+    if (_mockTimer != null) {
+      return;
+    }
     _notifyController = StreamController<List<int>>.broadcast();
     _mockTickCounter = 0;
 
