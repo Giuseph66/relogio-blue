@@ -13,6 +13,10 @@ class BleSettings {
   final String? preferredDeviceId;
   final bool autoReconnect;
   final bool enableMockMode;
+  final bool keepBleAliveInBackground;
+  final bool backgroundNotifyOnRx;
+  final String? backgroundServiceTitle;
+  final String? backgroundServiceText;
 
   const BleSettings({
     this.connectionMode = ConnectionMode.ble,
@@ -23,6 +27,10 @@ class BleSettings {
     this.preferredDeviceId,
     this.autoReconnect = false,
     this.enableMockMode = false,
+    this.keepBleAliveInBackground = true,
+    this.backgroundNotifyOnRx = true,
+    this.backgroundServiceTitle,
+    this.backgroundServiceText,
   });
 
   BleSettings copyWith({
@@ -34,6 +42,10 @@ class BleSettings {
     String? preferredDeviceId,
     bool? autoReconnect,
     bool? enableMockMode,
+    bool? keepBleAliveInBackground,
+    bool? backgroundNotifyOnRx,
+    String? backgroundServiceTitle,
+    String? backgroundServiceText,
   }) {
     return BleSettings(
       connectionMode: connectionMode ?? this.connectionMode,
@@ -44,6 +56,10 @@ class BleSettings {
       preferredDeviceId: preferredDeviceId ?? this.preferredDeviceId,
       autoReconnect: autoReconnect ?? this.autoReconnect,
       enableMockMode: enableMockMode ?? this.enableMockMode,
+      keepBleAliveInBackground: keepBleAliveInBackground ?? this.keepBleAliveInBackground,
+      backgroundNotifyOnRx: backgroundNotifyOnRx ?? this.backgroundNotifyOnRx,
+      backgroundServiceTitle: backgroundServiceTitle ?? this.backgroundServiceTitle,
+      backgroundServiceText: backgroundServiceText ?? this.backgroundServiceText,
     );
   }
 

@@ -15,6 +15,8 @@ import '../../../features/ble/domain/usecases/load_settings.dart';
 import '../../../features/ble/domain/usecases/save_settings.dart';
 import '../../../features/ble/domain/usecases/auto_reconnect_if_enabled.dart';
 import '../../../features/ble/data/models/ble_settings_model.dart';
+import '../background/ble_foreground_service.dart';
+import '../notifications/notification_service.dart';
 
 /// Simple dependency injection container
 class DependencyInjection {
@@ -97,4 +99,8 @@ class DependencyInjection {
   AutoReconnectIfEnabled get autoReconnectIfEnabled => _autoReconnectIfEnabled;
   BleRepository get bleRepository => _bleRepository;
   PreferencesRepository get preferencesRepository => _preferencesRepository;
+  
+  // Background services (singletons, can be accessed directly or via DI)
+  BleForegroundServiceManager get foregroundService => BleForegroundServiceManager();
+  NotificationService get notificationService => NotificationService();
 }

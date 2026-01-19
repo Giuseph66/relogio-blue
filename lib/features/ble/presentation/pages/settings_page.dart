@@ -19,8 +19,12 @@ class _SettingsPageState extends State<SettingsPage> {
   final _notifyUuidController = TextEditingController();
   final _deviceNameController = TextEditingController();
   final _deviceIdController = TextEditingController();
+  final _backgroundServiceTitleController = TextEditingController();
+  final _backgroundServiceTextController = TextEditingController();
   bool _autoReconnect = false;
   bool _enableMockMode = false;
+  bool _keepBleAliveInBackground = true;
+  bool _backgroundNotifyOnRx = true;
   ConnectionMode _connectionMode = ConnectionMode.ble;
   final _di = DependencyInjection();
 
@@ -41,6 +45,10 @@ class _SettingsPageState extends State<SettingsPage> {
       _deviceIdController.text = settings.preferredDeviceId ?? '';
       _autoReconnect = settings.autoReconnect;
       _enableMockMode = settings.enableMockMode;
+      _keepBleAliveInBackground = settings.keepBleAliveInBackground;
+      _backgroundNotifyOnRx = settings.backgroundNotifyOnRx;
+      _backgroundServiceTitleController.text = settings.backgroundServiceTitle ?? '';
+      _backgroundServiceTextController.text = settings.backgroundServiceText ?? '';
       _connectionMode = settings.connectionMode;
     });
   }
@@ -52,6 +60,8 @@ class _SettingsPageState extends State<SettingsPage> {
     _notifyUuidController.dispose();
     _deviceNameController.dispose();
     _deviceIdController.dispose();
+    _backgroundServiceTitleController.dispose();
+    _backgroundServiceTextController.dispose();
     super.dispose();
   }
 
@@ -131,6 +141,48 @@ class _SettingsPageState extends State<SettingsPage> {
                 value: _enableMockMode,
                 onChanged: (value) => setState(() => _enableMockMode = value),
               ),
+              const SizedBox(height: 30),
+              const Text(
+                'Background Service',
+                style: TextStyle(
+                  fontSize: 20,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 20),
+              SwitchListTile(
+                title: const Text('Manter BLE ativo em background', style: TextStyle(color: Colors.white)),
+                subtitle: const Text(
+                  'Mantém a conexão BLE ativa quando o app está em segundo plano',
+                  style: TextStyle(color: Colors.white70),
+                ),
+                value: _keepBleAliveInBackground,
+                onChanged: (value) => setState(() => _keepBleAliveInBackground = value),
+              ),
+              SwitchListTile(
+                title: const Text('Notificar ao receber mensagem', style: TextStyle(color: Colors.white)),
+                subtitle: const Text(
+                  'Exibe notificação quando uma mensagem é recebida em background',
+                  style: TextStyle(color: Colors.white70),
+                ),
+                value: _backgroundNotifyOnRx,
+                onChanged: (value) => setState(() => _backgroundNotifyOnRx = value),
+              ),
+              const SizedBox(height: 20),
+              _buildTextField(
+                'Título do Serviço (opcional)',
+                _backgroundServiceTitleController,
+                required: false,
+                hint: 'Ex: Relógio BLE',
+              ),
+              const SizedBox(height: 20),
+              _buildTextField(
+                'Texto do Serviço (opcional)',
+                _backgroundServiceTextController,
+                required: false,
+                hint: 'Ex: Conectado e recebendo mensagens',
+              ),
               const SizedBox(height: 40),
               SizedBox(
                 width: double.infinity,
@@ -191,6 +243,14 @@ class _SettingsPageState extends State<SettingsPage> {
           : _deviceIdController.text.trim(),
       autoReconnect: _autoReconnect,
       enableMockMode: _enableMockMode,
+      keepBleAliveInBackground: _keepBleAliveInBackground,
+      backgroundNotifyOnRx: _backgroundNotifyOnRx,
+      backgroundServiceTitle: _backgroundServiceTitleController.text.trim().isEmpty
+          ? null
+          : _backgroundServiceTitleController.text.trim(),
+      backgroundServiceText: _backgroundServiceTextController.text.trim().isEmpty
+          ? null
+          : _backgroundServiceTextController.text.trim(),
     );
 
     final result = await _di.saveSettings(settings);

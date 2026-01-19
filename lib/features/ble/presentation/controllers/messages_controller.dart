@@ -1,14 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/widgets.dart';
 import '../../../../core/di/dependency_injection.dart';
+import '../../../../core/background/ble_foreground_service.dart';
+import '../../../../core/notifications/notification_service.dart';
 import '../../domain/entities/ble_message.dart';
-import '../../domain/usecases/send_ble_message.dart';
-import '../../domain/usecases/subscribe_to_messages.dart';
+import '../../domain/usecases/load_settings.dart';
 import '../../data/models/ble_message_model.dart' as model;
 
 /// Controller for BLE messages
 class MessagesController {
   final DependencyInjection _di = DependencyInjection();
+  final BleForegroundServiceManager _foregroundService = BleForegroundServiceManager();
+  final NotificationService _notificationService = NotificationService();
+  late final LoadSettings _loadSettings;
 
   final _messagesController = StreamController<List<BleMessage>>.broadcast();
   final _tickStatusController = StreamController<TickStatus>.broadcast();
@@ -20,8 +25,10 @@ class MessagesController {
   int _messageIdCounter = 0;
   Timer? _tickTimer;
   TickStatus _lastTickStatus = const TickStatus();
+  AppLifecycleState? _appLifecycleState;
 
   MessagesController() {
+    _loadSettings = LoadSettings(_di.preferencesRepository);
     _startListening();
     _startTickMonitor();
   }
@@ -48,6 +55,8 @@ class MessagesController {
             timestamp: DateTime.now(),
           );
           _addMessage(message);
+          // Handle background notifications
+          _handleRxMessage(content);
         } catch (e) {
           // If not UTF-8, try to extract tick from raw data
           if (_tryUpdateTickFromData(data)) {
@@ -63,6 +72,8 @@ class MessagesController {
             timestamp: DateTime.now(),
           );
           _addMessage(message);
+          // Handle background notifications
+          _handleRxMessage('HEX: $hex');
         }
       },
       onError: (error) {
@@ -92,6 +103,23 @@ class MessagesController {
 
     final result = await _di.sendBleMessage(content);
     return result.isSuccess;
+  }
+
+  /// Simulate an RX message (used in mock mode)
+  Future<void> simulateRxMessage({String? content}) async {
+    final trimmed = content?.trim();
+    final messageText = (trimmed == null || trimmed.isEmpty)
+        ? 'Mock RX em ${DateTime.now().toIso8601String()}'
+        : trimmed;
+
+    final message = model.BleMessageModel(
+      id: 'msg_${_messageIdCounter++}',
+      content: messageText,
+      direction: MessageDirection.rx,
+      timestamp: DateTime.now(),
+    );
+    _addMessage(message);
+    await _handleRxMessage(messageText);
   }
 
   /// Clear messages
@@ -176,6 +204,44 @@ class MessagesController {
         _tickStatusController.add(_lastTickStatus);
       }
     });
+  }
+
+  /// Handle RX message - update foreground service notification and show local notification if needed
+  Future<void> _handleRxMessage(String content) async {
+    try {
+      // Load settings to check if notifications are enabled
+      final settingsResult = await _loadSettings();
+      final settings = settingsResult.valueOrNull;
+      
+      if (settings == null) return;
+
+      final lifecycleState =
+          _appLifecycleState ?? WidgetsBinding.instance.lifecycleState;
+      final isInBackground = lifecycleState == AppLifecycleState.paused ||
+          lifecycleState == AppLifecycleState.inactive ||
+          lifecycleState == AppLifecycleState.hidden;
+      final shouldNotify = isInBackground || settings.backgroundNotifyOnRx;
+
+      if (!shouldNotify) return;
+
+      // Update foreground service notification
+      if (_foregroundService.isRunning()) {
+        final preview = content.length > 50 ? '${content.substring(0, 47)}...' : content;
+        await _foregroundService.updateNotification(
+          text: 'Última mensagem: $preview',
+        );
+      }
+
+      // Show local notification when in background or explicitly enabled
+      await _notificationService.showRxNotification(content);
+    } catch (e) {
+      // Silently fail - notifications are optional
+    }
+  }
+
+  /// Update app lifecycle state (called from DashboardPage)
+  void updateAppLifecycleState(AppLifecycleState state) {
+    _appLifecycleState = state;
   }
 }
 

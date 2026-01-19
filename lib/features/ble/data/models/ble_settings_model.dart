@@ -12,6 +12,10 @@ class BleSettingsModel extends BleSettings {
     super.preferredDeviceId,
     super.autoReconnect,
     super.enableMockMode,
+    super.keepBleAliveInBackground,
+    super.backgroundNotifyOnRx,
+    super.backgroundServiceTitle,
+    super.backgroundServiceText,
   });
 
   factory BleSettingsModel.defaults() {
@@ -22,6 +26,8 @@ class BleSettingsModel extends BleSettings {
       preferredDeviceName: BleConstants.defaultPreferredDeviceName,
       autoReconnect: false,
       enableMockMode: false,
+      keepBleAliveInBackground: true,
+      backgroundNotifyOnRx: true,
     );
   }
 
@@ -38,6 +44,10 @@ class BleSettingsModel extends BleSettings {
       preferredDeviceId: json['preferredDeviceId'] as String?,
       autoReconnect: json['autoReconnect'] as bool? ?? false,
       enableMockMode: json['enableMockMode'] as bool? ?? false,
+      keepBleAliveInBackground: json['keepBleAliveInBackground'] as bool? ?? true,
+      backgroundNotifyOnRx: json['backgroundNotifyOnRx'] as bool? ?? true,
+      backgroundServiceTitle: json['backgroundServiceTitle'] as String?,
+      backgroundServiceText: json['backgroundServiceText'] as String?,
     );
   }
 
@@ -51,6 +61,10 @@ class BleSettingsModel extends BleSettings {
       'preferredDeviceId': preferredDeviceId,
       'autoReconnect': autoReconnect,
       'enableMockMode': enableMockMode,
+      'keepBleAliveInBackground': keepBleAliveInBackground,
+      'backgroundNotifyOnRx': backgroundNotifyOnRx,
+      'backgroundServiceTitle': backgroundServiceTitle,
+      'backgroundServiceText': backgroundServiceText,
     };
   }
 
@@ -64,6 +78,10 @@ class BleSettingsModel extends BleSettings {
     String? preferredDeviceId,
     bool? autoReconnect,
     bool? enableMockMode,
+    bool? keepBleAliveInBackground,
+    bool? backgroundNotifyOnRx,
+    String? backgroundServiceTitle,
+    String? backgroundServiceText,
   }) {
     return BleSettingsModel(
       connectionMode: connectionMode ?? this.connectionMode,
@@ -74,6 +92,10 @@ class BleSettingsModel extends BleSettings {
       preferredDeviceId: preferredDeviceId ?? this.preferredDeviceId,
       autoReconnect: autoReconnect ?? this.autoReconnect,
       enableMockMode: enableMockMode ?? this.enableMockMode,
+      keepBleAliveInBackground: keepBleAliveInBackground ?? this.keepBleAliveInBackground,
+      backgroundNotifyOnRx: backgroundNotifyOnRx ?? this.backgroundNotifyOnRx,
+      backgroundServiceTitle: backgroundServiceTitle ?? this.backgroundServiceTitle,
+      backgroundServiceText: backgroundServiceText ?? this.backgroundServiceText,
     );
   }
 }

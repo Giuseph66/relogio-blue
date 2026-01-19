@@ -3,6 +3,8 @@ import 'package:app_settings/app_settings.dart';
 import '../../../../core/widgets/app_drawer.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/permissions/permission_helper.dart';
+import '../../../../core/background/ble_foreground_service.dart';
+import '../../../../core/di/dependency_injection.dart';
 import '../controllers/ble_controller.dart';
 import '../controllers/messages_controller.dart';
 import '../../domain/repositories/ble_repository.dart' as ble;
@@ -18,11 +20,15 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserver {
   late final BleController _bleController;
   late final MessagesController _messagesController;
+  final BleForegroundServiceManager _foregroundService = BleForegroundServiceManager();
+  final DependencyInjection _di = DependencyInjection();
   bool _bluetoothEnabled = false;
   bool _permissionsGranted = false;
   ble.ConnectionState _connectionState = ble.ConnectionState.disconnected;
   String? _connectedDeviceId;
   bool _hasPromptedBluetoothOff = false;
+  bool _keepBleAliveInBackground = true;
+  bool _enableMockMode = false;
 
   @override
   void initState() {
@@ -31,6 +37,17 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     _messagesController = MessagesController();
     WidgetsBinding.instance.addObserver(this);
     _setupListeners();
+    _loadBackgroundSettings();
+  }
+
+  Future<void> _loadBackgroundSettings() async {
+    final settingsResult = await _di.loadSettings();
+    final settings = settingsResult.valueOrNull;
+    if (!mounted) return;
+    setState(() {
+      _keepBleAliveInBackground = settings?.keepBleAliveInBackground ?? true;
+      _enableMockMode = settings?.enableMockMode ?? false;
+    });
   }
 
   void _setupListeners() {
@@ -58,8 +75,26 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Update messages controller with lifecycle state
+    _messagesController.updateAppLifecycleState(state);
+    
     if (state == AppLifecycleState.resumed) {
       _bleController.refreshStatus();
+    } else if (state == AppLifecycleState.paused || 
+               state == AppLifecycleState.inactive ||
+               state == AppLifecycleState.hidden) {
+      // Going to background - ensure service is running if connected and enabled
+      if (_connectionState == ble.ConnectionState.connected && 
+          _keepBleAliveInBackground &&
+          !_foregroundService.isRunning()) {
+        final deviceId = _bleController.getConnectedDeviceId();
+        if (deviceId != null) {
+          _foregroundService.startBleKeepAliveService(
+            deviceId: deviceId,
+            deviceName: 'Relógio BLE',
+          );
+        }
+      }
     }
   }
 
@@ -223,9 +258,212 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                 );
               },
             ),
+            const SizedBox(height: 30),
+            _buildBackgroundServiceSection(),
+            const SizedBox(height: 30),
+            _buildDebugSection(),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildBackgroundServiceSection() {
+    final isRunning = _foregroundService.isRunning();
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Background Service',
+          style: TextStyle(
+            fontSize: 20,
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 15),
+        Container(
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.white.withOpacity(0.2)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    isRunning ? Icons.check_circle : Icons.cancel,
+                    color: isRunning ? Colors.green : Colors.red,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Status: ${isRunning ? "Ativo" : "Inativo"}',
+                    style: TextStyle(
+                      color: isRunning ? Colors.green : Colors.red,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Auto keep-alive: ${_keepBleAliveInBackground ? "Ligado" : "Desligado"}',
+                style: const TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+              const SizedBox(height: 15),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: isRunning
+                          ? () async {
+                              await _foregroundService.stopBleKeepAliveService();
+                              setState(() {});
+                            }
+                          : () async {
+                              final deviceId = _bleController.getConnectedDeviceId();
+                              if (deviceId != null) {
+                                await _foregroundService.startBleKeepAliveService(
+                                  deviceId: deviceId,
+                                  deviceName: 'Relógio BLE',
+                                );
+                                setState(() {});
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Conecte-se a um dispositivo primeiro'),
+                                    backgroundColor: Colors.orange,
+                                  ),
+                                );
+                              }
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isRunning ? Colors.red : Colors.green,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: Text(isRunning ? 'Parar Serviço' : 'Iniciar Serviço'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDebugSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Debug / Background Test',
+          style: TextStyle(
+            fontSize: 20,
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 15),
+        Container(
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            color: Colors.blue.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.blue.withOpacity(0.3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Instruções:',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '1. Conecte-se a um dispositivo (mock ou real)\n'
+                '2. Inicie o Foreground Service\n'
+                '3. Bloqueie a tela por 20s\n'
+                '4. (Mock) Use "Simular RX"\n'
+                '5. Verifique se chegou notificação/log',
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              const SizedBox(height: 15),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pushNamed(context, AppRoutes.connect),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: BorderSide(color: Colors.white.withOpacity(0.6)),
+                      ),
+                      child: const Text('Conectar'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _foregroundService.isRunning()
+                          ? () async {
+                              await _foregroundService.stopBleKeepAliveService();
+                              setState(() {});
+                            }
+                          : () async {
+                              final deviceId = _bleController.getConnectedDeviceId();
+                              if (deviceId != null) {
+                                await _foregroundService.startBleKeepAliveService(
+                                  deviceId: deviceId,
+                                  deviceName: 'Relógio BLE',
+                                );
+                                setState(() {});
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Conecte-se a um dispositivo primeiro'),
+                                    backgroundColor: Colors.orange,
+                                  ),
+                                );
+                              }
+                            },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: BorderSide(color: Colors.white.withOpacity(0.6)),
+                      ),
+                      child: Text(_foregroundService.isRunning() 
+                          ? 'Parar Service' 
+                          : 'Start Service'),
+                    ),
+                  ),
+                ],
+              ),
+              if (_enableMockMode) ...[
+                const SizedBox(height: 10),
+                OutlinedButton(
+                  onPressed: () => _messagesController.simulateRxMessage(),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: BorderSide(color: Colors.white.withOpacity(0.6)),
+                  ),
+                  child: const Text('Simular RX'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 

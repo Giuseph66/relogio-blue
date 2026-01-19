@@ -2,17 +2,14 @@ import 'dart:async';
 import '../../../../core/di/dependency_injection.dart';
 import '../../../../core/permissions/permission_helper.dart';
 import '../../../../core/ble/ble_errors.dart';
+import '../../../../core/background/ble_foreground_service.dart';
 import '../../domain/entities/ble_device.dart';
 import '../../domain/repositories/ble_repository.dart';
-import '../../domain/usecases/start_ble_scan.dart';
-import '../../domain/usecases/stop_ble_scan.dart';
-import '../../domain/usecases/connect_to_device.dart';
-import '../../domain/usecases/disconnect_device.dart';
-import '../../domain/usecases/load_settings.dart';
 
 /// Controller for BLE operations
 class BleController {
   final DependencyInjection _di = DependencyInjection();
+  final BleForegroundServiceManager _foregroundService = BleForegroundServiceManager();
 
   // Streams
   final _scanResultsController = StreamController<List<BleDevice>>.broadcast();
@@ -37,6 +34,7 @@ class BleController {
   ConnectionState _currentConnectionState = ConnectionState.disconnected;
   String? _connectedDeviceId;
   bool _lastBluetoothEnabled = false;
+  bool _userInitiatedDisconnect = false;
 
   BleController() {
     _initialize();
@@ -166,6 +164,7 @@ class BleController {
       return;
     }
 
+    _userInitiatedDisconnect = false;
     _connectionSubscription?.cancel();
     final connectionStream = await _di.connectToDevice(device.id, settings);
     _connectionSubscription = connectionStream.listen(
@@ -176,19 +175,60 @@ class BleController {
           _connectedDeviceId = device.id;
           // Save last device
           _di.preferencesRepository.saveLastDevice(device);
+          // Start foreground service if enabled
+          _handleConnectionStateChange(state, device, settings);
+        } else if (state == ConnectionState.disconnected) {
+          _connectedDeviceId = null;
+          if (_userInitiatedDisconnect || !settings.keepBleAliveInBackground) {
+            _foregroundService.stopBleKeepAliveService();
+            _userInitiatedDisconnect = false;
+          }
         }
       },
       onError: (error) {
         _currentConnectionState = ConnectionState.disconnected;
+        _connectedDeviceId = null;
         _connectionStateController.add(ConnectionState.disconnected);
+        if (_userInitiatedDisconnect || !settings.keepBleAliveInBackground) {
+          _foregroundService.stopBleKeepAliveService();
+          _userInitiatedDisconnect = false;
+        }
       },
     );
   }
 
+  /// Handle connection state change and manage foreground service
+  Future<void> _handleConnectionStateChange(
+    ConnectionState state,
+    BleDevice device,
+    dynamic settings,
+  ) async {
+    if (state == ConnectionState.connected && settings.keepBleAliveInBackground) {
+      final title = settings.backgroundServiceTitle ?? device.name;
+      final text = settings.backgroundServiceText ?? 'Conectado e recebendo mensagens';
+      
+      await _foregroundService.startBleKeepAliveService(
+        deviceId: device.id,
+        deviceName: device.name,
+      );
+      
+      // Update notification with custom title/text if provided
+      if (settings.backgroundServiceTitle != null || settings.backgroundServiceText != null) {
+        await _foregroundService.updateNotification(
+          title: title,
+          text: text,
+        );
+      }
+    }
+  }
+
   /// Disconnect
   Future<void> disconnect() async {
+    _userInitiatedDisconnect = true;
     await _di.disconnectDevice();
     _connectedDeviceId = null;
+    // Stop foreground service
+    await _foregroundService.stopBleKeepAliveService();
   }
 
   /// Get connected device ID
