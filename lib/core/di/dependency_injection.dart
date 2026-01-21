@@ -17,6 +17,13 @@ import '../../../features/ble/domain/usecases/auto_reconnect_if_enabled.dart';
 import '../../../features/ble/data/models/ble_settings_model.dart';
 import '../background/ble_foreground_service.dart';
 import '../notifications/notification_service.dart';
+import '../../../features/maps/data/datasources/geolocator_datasource.dart';
+import '../../../features/maps/data/datasources/geocoding_datasource.dart';
+import '../../../features/maps/data/repositories/location_repository_impl.dart';
+import '../../../features/maps/domain/repositories/location_repository.dart';
+import '../../../features/maps/domain/usecases/get_current_location.dart';
+import '../../../features/maps/domain/usecases/reverse_geocode.dart';
+import '../../../features/maps/presentation/controllers/map_controller.dart';
 
 /// Simple dependency injection container
 class DependencyInjection {
@@ -32,6 +39,7 @@ class DependencyInjection {
   // Repositories
   late final BleRepository _bleRepository;
   late final PreferencesRepository _preferencesRepository;
+  late final LocationRepository _locationRepository;
 
   // Use cases
   late final StartBleScan _startBleScan;
@@ -43,6 +51,13 @@ class DependencyInjection {
   late final LoadSettings _loadSettings;
   late final SaveSettings _saveSettings;
   late final AutoReconnectIfEnabled _autoReconnectIfEnabled;
+  
+  // Maps use cases
+  late final GetCurrentLocation _getCurrentLocation;
+  late final ReverseGeocode _reverseGeocode;
+  
+  // Maps controller
+  late final MapController _mapController;
 
   bool _initialized = false;
 
@@ -84,6 +99,21 @@ class DependencyInjection {
       _connectToDevice,
     );
 
+    // Maps dependencies
+    final geolocatorDataSource = GeolocatorDataSource();
+    final geocodingDataSource = GeocodingDataSource();
+    _locationRepository = LocationRepositoryImpl(
+      geolocatorDataSource,
+      geocodingDataSource,
+    );
+    _getCurrentLocation = GetCurrentLocation(_locationRepository);
+    _reverseGeocode = ReverseGeocode(_locationRepository);
+    _mapController = MapController(
+      _getCurrentLocation,
+      _reverseGeocode,
+      _locationRepository,
+    );
+
     _initialized = true;
   }
 
@@ -99,6 +129,12 @@ class DependencyInjection {
   AutoReconnectIfEnabled get autoReconnectIfEnabled => _autoReconnectIfEnabled;
   BleRepository get bleRepository => _bleRepository;
   PreferencesRepository get preferencesRepository => _preferencesRepository;
+  
+  // Maps
+  LocationRepository get locationRepository => _locationRepository;
+  GetCurrentLocation get getCurrentLocation => _getCurrentLocation;
+  ReverseGeocode get reverseGeocode => _reverseGeocode;
+  MapController get mapController => _mapController;
   
   // Background services (singletons, can be accessed directly or via DI)
   BleForegroundServiceManager get foregroundService => BleForegroundServiceManager();

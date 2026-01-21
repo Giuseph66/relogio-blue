@@ -13,6 +13,7 @@ class BleSettings {
   final String? preferredDeviceId;
   final bool autoReconnect;
   final bool enableMockMode;
+  final bool keepServiceWhenAppClosed;
   final bool keepBleAliveInBackground;
   final bool backgroundNotifyOnRx;
   final String? backgroundServiceTitle;
@@ -28,6 +29,7 @@ class BleSettings {
     this.preferredDeviceId,
     this.autoReconnect = false,
     this.enableMockMode = false,
+    this.keepServiceWhenAppClosed = true,
     this.keepBleAliveInBackground = true,
     this.backgroundNotifyOnRx = true,
     this.backgroundServiceTitle,
@@ -44,6 +46,7 @@ class BleSettings {
     String? preferredDeviceId,
     bool? autoReconnect,
     bool? enableMockMode,
+    bool? keepServiceWhenAppClosed,
     bool? keepBleAliveInBackground,
     bool? backgroundNotifyOnRx,
     String? backgroundServiceTitle,
@@ -59,6 +62,8 @@ class BleSettings {
       preferredDeviceId: preferredDeviceId ?? this.preferredDeviceId,
       autoReconnect: autoReconnect ?? this.autoReconnect,
       enableMockMode: enableMockMode ?? this.enableMockMode,
+      keepServiceWhenAppClosed:
+          keepServiceWhenAppClosed ?? this.keepServiceWhenAppClosed,
       keepBleAliveInBackground: keepBleAliveInBackground ?? this.keepBleAliveInBackground,
       backgroundNotifyOnRx: backgroundNotifyOnRx ?? this.backgroundNotifyOnRx,
       backgroundServiceTitle: backgroundServiceTitle ?? this.backgroundServiceTitle,

@@ -1,0 +1,36 @@
+aplicar icon do app : dart run flutter_launcher_icons 
+
+BUILD INSTRUCTIONS (Android, iOS, Linux, Windows)
+
+Use the Flutter binary from:
+  /home/jesus/development/flutter/bin/flutter
+
+1) Android (APK release)
+  /home/jesus/development/flutter/bin/flutter pub get
+  /home/jesus/development/flutter/bin/flutter build apk --release
+  Output:
+    build/app/outputs/flutter-apk/app-release.apk
+
+2) Android (AAB for Play Store)
+  /home/jesus/development/flutter/bin/flutter build appbundle --release
+  Output:
+    build/app/outputs/bundle/release/app-release.aab
+
+3) iOS (release)
+  NOTE: iOS build requires macOS and Xcode.
+  /home/jesus/development/flutter/bin/flutter pub get
+  /home/jesus/development/flutter/bin/flutter build ios --release
+  Output:
+    build/ios/iphoneos/Runner.app
+
+4) Linux (release)
+  /home/jesus/development/flutter/bin/flutter pub get
+  /home/jesus/development/flutter/bin/flutter build linux --release
+  Output:
+    build/linux/x64/release/bundle/
+
+5) Windows (release)
+  /home/jesus/development/flutter/bin/flutter pub get
+  /home/jesus/development/flutter/bin/flutter build windows --release
+  Output:
+    build/windows/x64/runner/Release/

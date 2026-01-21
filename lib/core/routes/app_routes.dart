@@ -7,6 +7,7 @@ import '../../features/ble/presentation/pages/connect_device_page.dart';
 import '../../features/ble/presentation/pages/messages_page.dart';
 import '../../features/ble/presentation/pages/settings_page.dart';
 import '../../features/ble/presentation/pages/about_page.dart';
+import '../../features/maps/presentation/pages/map_page.dart';
 
 class AppRoutes {
   static const String home = '/';
@@ -15,6 +16,7 @@ class AppRoutes {
   static const String messages = '/messages';
   static const String settings = '/settings';
   static const String about = '/about';
+  static const String map = '/map';
   static const String tela1 = '/tela1';
   static const String tela2 = '/tela2';
   static const String tela3 = '/tela3';
@@ -53,6 +55,13 @@ class AppRoutes {
     if (routeName == about) {
       return MaterialPageRoute(
         builder: (_) => const AboutPage(),
+        settings: routeSettings,
+      );
+    }
+    
+    if (routeName == map) {
+      return MaterialPageRoute(
+        builder: (_) => const MapPage(),
         settings: routeSettings,
       );
     }

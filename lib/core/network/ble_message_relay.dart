@@ -39,6 +39,8 @@ class BleMessageRelayService {
         AppLogger.warning(
           'Falha ao enviar RX para servidor: ${response.statusCode}',
         );
+      } else {
+        AppLogger.debug('RX enviado ao servidor: ${response.statusCode}');
       }
     } catch (e) {
       AppLogger.warning('Erro ao enviar RX para servidor: $e');

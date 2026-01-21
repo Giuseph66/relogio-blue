@@ -116,12 +116,17 @@
 
       function renderInitial(messages) {
         messagesEl.innerHTML = "";
-        if (!messages.length) {
+        // Filtrar mensagens que contêm "tick" antes de renderizar
+        const filteredMessages = messages.filter(msg => {
+          const content = String(msg.content || '').toLowerCase();
+          return !content.includes('tick');
+        });
+        if (!filteredMessages.length) {
           emptyEl.style.display = "block";
           return;
         }
         emptyEl.style.display = "none";
-        messages.slice().reverse().forEach((msg) => renderMessage(msg, false));
+        filteredMessages.slice().reverse().forEach((msg) => renderMessage(msg, false));
       }
 
       async function loadMessages() {
@@ -144,12 +149,21 @@
       const source = new EventSource("/events");
       source.addEventListener("init", (event) => {
         const data = JSON.parse(event.data || "[]");
-        renderInitial(data);
+        // Filtrar mensagens que contêm "tick" antes de renderizar
+        const filteredData = Array.isArray(data) 
+          ? data.filter(msg => {
+              const content = String(msg.content || '').toLowerCase();
+              return !content.includes('tick');
+            })
+          : [];
+        renderInitial(filteredData);
         setStatus(true);
       });
       source.addEventListener("message", (event) => {
         const message = JSON.parse(event.data || "{}");
-        if (message.content) {
+        // Filtrar mensagens que contêm "tick" (case insensitive)
+        const content = String(message.content || '').toLowerCase();
+        if (message.content && !content.includes('tick')) {
           emptyEl.style.display = "none";
           renderMessage(message);
         }

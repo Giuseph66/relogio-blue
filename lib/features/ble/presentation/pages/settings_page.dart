@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/widgets/app_drawer.dart';
 import '../../../../core/di/dependency_injection.dart';
 import '../../../../core/ble/ble_constants.dart';
+import '../../../../core/background/ble_foreground_service.dart';
 import '../../data/models/ble_settings_model.dart';
 import '../../domain/entities/ble_settings.dart';
 
@@ -24,10 +25,12 @@ class _SettingsPageState extends State<SettingsPage> {
   final _serverApiUrlController = TextEditingController();
   bool _autoReconnect = false;
   bool _enableMockMode = false;
+  bool _keepServiceWhenAppClosed = true;
   bool _keepBleAliveInBackground = true;
   bool _backgroundNotifyOnRx = true;
   ConnectionMode _connectionMode = ConnectionMode.ble;
   final _di = DependencyInjection();
+  final _foregroundService = BleForegroundServiceManager();
 
   @override
   void initState() {
@@ -46,6 +49,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _deviceIdController.text = settings.preferredDeviceId ?? '';
       _autoReconnect = settings.autoReconnect;
       _enableMockMode = settings.enableMockMode;
+      _keepServiceWhenAppClosed = settings.keepServiceWhenAppClosed;
       _keepBleAliveInBackground = settings.keepBleAliveInBackground;
       _backgroundNotifyOnRx = settings.backgroundNotifyOnRx;
       _backgroundServiceTitleController.text = settings.backgroundServiceTitle ?? '';
@@ -134,6 +138,18 @@ class _SettingsPageState extends State<SettingsPage> {
                 title: const Text('Auto Reconectar', style: TextStyle(color: Colors.white)),
                 value: _autoReconnect,
                 onChanged: (value) => setState(() => _autoReconnect = value),
+              ),
+              SwitchListTile(
+                title: const Text(
+                  'Manter serviço com app fechado',
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: const Text(
+                  'Permite manter o BLE ativo mesmo após fechar o app',
+                  style: TextStyle(color: Colors.white70),
+                ),
+                value: _keepServiceWhenAppClosed,
+                onChanged: (value) => setState(() => _keepServiceWhenAppClosed = value),
               ),
               SwitchListTile(
                 title: const Text('Modo Simulado', style: TextStyle(color: Colors.white)),
@@ -262,6 +278,7 @@ class _SettingsPageState extends State<SettingsPage> {
           : _deviceIdController.text.trim(),
       autoReconnect: _autoReconnect,
       enableMockMode: _enableMockMode,
+      keepServiceWhenAppClosed: _keepServiceWhenAppClosed,
       keepBleAliveInBackground: _keepBleAliveInBackground,
       backgroundNotifyOnRx: _backgroundNotifyOnRx,
       backgroundServiceTitle: _backgroundServiceTitleController.text.trim().isEmpty
@@ -275,6 +292,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
     final result = await _di.saveSettings(settings);
     if (result.isSuccess) {
+      if (!_keepServiceWhenAppClosed) {
+        await _foregroundService.stopBleKeepAliveService();
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

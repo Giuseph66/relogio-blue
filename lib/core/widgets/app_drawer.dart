@@ -62,6 +62,12 @@ class AppDrawer extends StatelessWidget {
             title: 'Configurações',
             route: AppRoutes.settings,
           ),
+          _buildDrawerItem(
+            context,
+            icon: Icons.map,
+            title: 'Mapa',
+            route: AppRoutes.map,
+          ),
           const Divider(color: Colors.white24),
           ExpansionTile(
             title: const Text(

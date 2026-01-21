@@ -1,4 +1,6 @@
 #include "BleInteractor.h"
+#include "UiConfig.h"
+#include <ctype.h>
 
 namespace {
 size_t safeCopy(char* target, size_t targetSize, const uint8_t* data, size_t len) {
@@ -11,6 +13,20 @@ size_t safeCopy(char* target, size_t targetSize, const uint8_t* data, size_t len
   target[copyLen] = '\0';
   return copyLen;
 }
+
+size_t trimTrailingWhitespace(char* text) {
+  if (text == nullptr) {
+    return 0;
+  }
+  size_t len = strlen(text);
+  while (len > 0 && isspace(static_cast<unsigned char>(text[len - 1]))) {
+    text[len - 1] = '\0';
+    --len;
+  }
+  return len;
+}
+
+const uint32_t kResetSequenceWindowMs = 2000;
 }
 
 BleInteractor::BleInteractor(
@@ -24,7 +40,11 @@ BleInteractor::BleInteractor(
       _ui(ui),
       _connected(false),
       _lastNotifyAt(0),
-      _tickCounter(0) {}
+      _tickCounter(0),
+      _resetArmed(false),
+      _resetArmedAt(0),
+      _awaitingAnswer(false),
+      _questionStartTime(0) {}
 
 void BleInteractor::onWrite(const uint8_t* data, size_t len) {
   char buffer[96];
@@ -40,6 +60,19 @@ void BleInteractor::onWrite(const uint8_t* data, size_t len) {
   Serial.println(" bytes)");
   if (_ui != nullptr) {
     _ui->setLastRx(buffer);
+  }
+
+  const size_t trimmedLen = trimTrailingWhitespace(buffer);
+  if (trimmedLen > 0 && buffer[trimmedLen - 1] == '?') {
+    buffer[trimmedLen - 1] = '\0';
+    trimTrailingWhitespace(buffer);
+    if (_ui != nullptr) {
+      _ui->setQuestion(buffer);
+      _ui->setScreen(ScreenType::QUESTION);
+    }
+    _awaitingAnswer = true;
+    _questionStartTime = millis();
+    return;
   }
 
   if (strcmp(buffer, "PING") == 0) {
@@ -85,6 +118,12 @@ void BleInteractor::onWrite(const uint8_t* data, size_t len) {
 
 void BleInteractor::onConnectionChanged(bool connected) {
   _connected = connected;
+  if (!connected) {
+    _awaitingAnswer = false;
+    if (_ui != nullptr) {
+      _ui->setScreen(ScreenType::MAIN);
+    }
+  }
   if (_ui != nullptr) {
     _ui->setConnected(connected);
   }
@@ -112,6 +151,17 @@ void BleInteractor::tick() {
       char message[32];
       snprintf(message, sizeof(message), "tick: %lu", static_cast<unsigned long>(_tickCounter));
       enqueueText(message, false);
+    }
+  }
+
+  if (_awaitingAnswer) {
+    if (millis() - _questionStartTime >= UI_QUESTION_TIMEOUT_MS) {
+      Serial.println("Timeout da pergunta (Vacoooo)");
+      enqueueText("Vacoooo(504)", true);
+      if (_ui != nullptr) {
+        _ui->setScreen(ScreenType::MAIN);
+      }
+      _awaitingAnswer = false;
     }
   }
 
@@ -147,6 +197,57 @@ void BleInteractor::flushQueue() {
 
 void BleInteractor::handleButtonEvent(const char* buttonName, bool longPress) {
   if (buttonName == nullptr) {
+    return;
+  }
+
+  if (_awaitingAnswer && !longPress) {
+    const bool isYes = strcmp(buttonName, "S6") == 0;
+    const bool isNo = strcmp(buttonName, "S11") == 0;
+    if (isYes || isNo) {
+      const char* answer = isYes ? "SIM" : "NAO";
+      char response[32];
+      snprintf(response, sizeof(response), "%s", answer);
+      enqueueText(response, true);
+      if (_ui != nullptr) {
+        _ui->setScreen(ScreenType::MAIN);
+        _ui->setLastButton(buttonName, longPress);
+      }
+      _awaitingAnswer = false;
+      return;
+    } else {
+      if (_ui != nullptr) {
+        _ui->setLastButton(buttonName, longPress);
+      }
+      return;
+    }
+  }
+
+  const uint32_t now = millis();
+  const bool isS13 = strcmp(buttonName, "S13") == 0;
+  const bool isS4 = strcmp(buttonName, "S4") == 0;
+
+  if (_resetArmed && (now - _resetArmedAt > kResetSequenceWindowMs)) {
+    _resetArmed = false;
+  }
+
+  if (_resetArmed && !isS13 && !isS4) {
+    _resetArmed = false;
+  }
+
+  if (!longPress && isS13) {
+    _resetArmed = true;
+    _resetArmedAt = now;
+  }
+
+  if (!longPress && isS4 && _resetArmed &&
+      (now - _resetArmedAt <= kResetSequenceWindowMs)) {
+    _resetArmed = false;
+    if (_ui != nullptr) {
+      _ui->setLastTx("REINICIANDO...");
+    }
+    Serial.println("Reiniciando ESP32 (S13 -> S4)");
+    delay(100);
+    ESP.restart();
     return;
   }
 

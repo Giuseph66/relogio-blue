@@ -86,13 +86,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
       if (_connectionState == ble.ConnectionState.connected && 
           _keepBleAliveInBackground &&
           !_foregroundService.isRunning()) {
-        final deviceId = _bleController.getConnectedDeviceId();
-        if (deviceId != null) {
-          _foregroundService.startBleKeepAliveService(
-            deviceId: deviceId,
-            deviceName: 'Relógio BLE',
-          );
-        }
+        Future.microtask(() => _startForegroundService(silent: true));
       }
     }
   }
@@ -267,7 +261,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
             const SizedBox(height: 30),
             _buildBackgroundServiceSection(),
             const SizedBox(height: 30),
-            _buildDebugSection(),
           ],
         ),
       ),
@@ -332,23 +325,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                               await _foregroundService.stopBleKeepAliveService();
                               setState(() {});
                             }
-                          : () async {
-                              final deviceId = _bleController.getConnectedDeviceId();
-                              if (deviceId != null) {
-                                await _foregroundService.startBleKeepAliveService(
-                                  deviceId: deviceId,
-                                  deviceName: 'Relógio BLE',
-                                );
-                                setState(() {});
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Conecte-se a um dispositivo primeiro'),
-                                    backgroundColor: Colors.orange,
-                                  ),
-                                );
-                              }
-                            },
+                          : () async => _startForegroundService(),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: isRunning ? Colors.red : Colors.green,
                         foregroundColor: Colors.white,
@@ -359,113 +336,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                   ),
                 ],
               ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDebugSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Debug / Background Test',
-          style: TextStyle(
-            fontSize: 20,
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 15),
-        Container(
-          padding: const EdgeInsets.all(15),
-          decoration: BoxDecoration(
-            color: Colors.blue.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.blue.withOpacity(0.3)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Instruções:',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                '1. Conecte-se a um dispositivo (mock ou real)\n'
-                '2. Inicie o Foreground Service\n'
-                '3. Bloqueie a tela por 20s\n'
-                '4. (Mock) Use "Simular RX"\n'
-                '5. Verifique se chegou notificação/log',
-                style: TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-              const SizedBox(height: 15),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pushNamed(context, AppRoutes.connect),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: BorderSide(color: Colors.white.withOpacity(0.6)),
-                      ),
-                      child: const Text('Conectar'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _foregroundService.isRunning()
-                          ? () async {
-                              await _foregroundService.stopBleKeepAliveService();
-                              setState(() {});
-                            }
-                          : () async {
-                              final deviceId = _bleController.getConnectedDeviceId();
-                              if (deviceId != null) {
-                                await _foregroundService.startBleKeepAliveService(
-                                  deviceId: deviceId,
-                                  deviceName: 'Relógio BLE',
-                                );
-                                setState(() {});
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Conecte-se a um dispositivo primeiro'),
-                                    backgroundColor: Colors.orange,
-                                  ),
-                                );
-                              }
-                            },
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: BorderSide(color: Colors.white.withOpacity(0.6)),
-                      ),
-                      child: Text(_foregroundService.isRunning() 
-                          ? 'Parar Service' 
-                          : 'Start Service'),
-                    ),
-                  ),
-                ],
-              ),
-              if (_enableMockMode) ...[
-                const SizedBox(height: 10),
-                OutlinedButton(
-                  onPressed: () => _messagesController.simulateRxMessage(),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: BorderSide(color: Colors.white.withOpacity(0.6)),
-                  ),
-                  child: const Text('Simular RX'),
-                ),
-              ],
             ],
           ),
         ),
@@ -680,5 +550,49 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
 
   String _formatTime(DateTime time) {
     return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:${time.second.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _startForegroundService({bool silent = false}) async {
+    final deviceId = _bleController.getConnectedDeviceId();
+    if (deviceId == null) {
+      if (!silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Conecte-se a um dispositivo primeiro'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    final settingsResult = await _di.loadSettings();
+    final settings = settingsResult.valueOrNull;
+    if (settings == null) {
+      if (!silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Configurações BLE inválidas'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    await _foregroundService.startBleKeepAliveService(
+      deviceId: deviceId,
+      deviceName: settings.preferredDeviceName.isNotEmpty
+          ? settings.preferredDeviceName
+          : 'Relógio BLE',
+      serviceUuid: settings.serviceUuid,
+      notifyCharacteristicUuid: settings.notifyCharacteristicUuid,
+      serverApiUrl: settings.serverApiUrl,
+      keepServiceWhenAppClosed: settings.keepServiceWhenAppClosed,
+    );
+
+    if (mounted) {
+      setState(() {});
+    }
   }
 }

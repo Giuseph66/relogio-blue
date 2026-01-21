@@ -40,6 +40,7 @@ class PreferencesRepositoryImpl implements PreferencesRepository {
               preferredDeviceId: settings.preferredDeviceId,
               autoReconnect: settings.autoReconnect,
               enableMockMode: settings.enableMockMode,
+              keepServiceWhenAppClosed: settings.keepServiceWhenAppClosed,
               keepBleAliveInBackground: settings.keepBleAliveInBackground,
               backgroundNotifyOnRx: settings.backgroundNotifyOnRx,
               backgroundServiceTitle: settings.backgroundServiceTitle,

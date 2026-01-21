@@ -159,12 +159,17 @@ class ReactiveBleDataSource {
 
         if (state == ConnectionState.connected) {
           _subscribeToNotifications(settings);
+        } else if (state == ConnectionState.disconnected) {
+          _connectedDeviceId = null;
+          _clearNotifySubscription();
         }
       },
       onError: (error) {
         AppLogger.error('Erro na conexão', error);
         _connectionStateController!.addError(error);
         _connectionStateController!.add(ConnectionState.disconnected);
+        _connectedDeviceId = null;
+        _clearNotifySubscription();
       },
     );
 
@@ -256,7 +261,7 @@ class ReactiveBleDataSource {
     }
 
     await _connectionSubscription?.cancel();
-    await _notifySubscription?.cancel();
+    _clearNotifySubscription();
     _connectionStateController?.add(ConnectionState.disconnecting);
 
     if (_connectedDeviceId != null) {
@@ -286,6 +291,11 @@ class ReactiveBleDataSource {
     _notifyController = null;
     _connectedDeviceId = null;
     AppLogger.info('Desconectado (Simulado)');
+  }
+
+  Future<void> _clearNotifySubscription() async {
+    await _notifySubscription?.cancel();
+    _notifySubscription = null;
   }
 
   /// Write to characteristic
