@@ -116,7 +116,6 @@ class _MessagesPageState extends State<MessagesPage> {
                     Expanded(
                       child: TextField(
                         controller: _messageController,
-                        enabled: isConnected,
                         decoration: InputDecoration(
                           hintText: 'Digite uma mensagem...',
                           border: OutlineInputBorder(
@@ -130,7 +129,7 @@ class _MessagesPageState extends State<MessagesPage> {
                     ),
                     const SizedBox(width: 8),
                     ElevatedButton(
-                      onPressed: isConnected ? _sendMessage : null,
+                      onPressed: _sendMessage,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: Colors.black,

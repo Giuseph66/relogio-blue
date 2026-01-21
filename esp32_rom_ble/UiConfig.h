@@ -5,5 +5,6 @@
 
 #define UI_UPDATE_INTERVAL_MS 150
 #define UI_TITLE "RELOGIO"
+#define UI_QUESTION_TIMEOUT_MS 10000
 
 #endif

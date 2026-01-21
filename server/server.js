@@ -29,6 +29,12 @@ function sendText(res, statusCode, payload, contentType = 'text/plain; charset=u
 }
 
 function addMessage(message) {
+  // Filtrar mensagens que contêm "tick" (case insensitive)
+  const content = String(message.content || '').toLowerCase();
+  if (content.includes('tick')) {
+    return; // Ignorar mensagens com "tick"
+  }
+
   messages.push(message);
   if (messages.length > MAX_MESSAGES) {
     messages.shift();
@@ -68,7 +74,12 @@ function handleApi(req, res, pathname) {
   }
 
   if (pathname === '/api/messages' && req.method === 'GET') {
-    sendJson(res, 200, { messages });
+    // Filtrar mensagens que contêm "tick" antes de retornar
+    const filteredMessages = messages.filter(msg => {
+      const content = String(msg.content || '').toLowerCase();
+      return !content.includes('tick');
+    });
+    sendJson(res, 200, { messages: filteredMessages });
     return;
   }
 

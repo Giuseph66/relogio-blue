@@ -4,6 +4,7 @@ import '../../../../core/permissions/permission_helper.dart';
 import '../../../../core/ble/ble_errors.dart';
 import '../../../../core/background/ble_foreground_service.dart';
 import '../../domain/entities/ble_device.dart';
+import '../../domain/entities/ble_settings.dart';
 import '../../domain/repositories/ble_repository.dart';
 
 /// Controller for BLE operations
@@ -29,12 +30,15 @@ class BleController {
   StreamSubscription<ConnectionState>? _connectionSubscription;
   StreamSubscription<bool>? _bluetoothSubscription;
   Timer? _statusTimer;
+  Timer? _autoReconnectTimer;
   bool _isScanning = false;
   bool _isRefreshingStatus = false;
   ConnectionState _currentConnectionState = ConnectionState.disconnected;
   String? _connectedDeviceId;
   bool _lastBluetoothEnabled = false;
   bool _userInitiatedDisconnect = false;
+  bool _autoReconnectInProgress = false;
+  int _autoReconnectAttempt = 0;
 
   BleController() {
     _initialize();
@@ -68,6 +72,7 @@ class BleController {
     );
 
     _startStatusTimer();
+    _attemptAutoReconnectOnStart();
   }
 
   /// Request permissions
@@ -165,6 +170,7 @@ class BleController {
     }
 
     _userInitiatedDisconnect = false;
+    _autoReconnectInProgress = false;
     _connectionSubscription?.cancel();
     final connectionStream = await _di.connectToDevice(device.id, settings);
     _connectionSubscription = connectionStream.listen(
@@ -173,6 +179,7 @@ class BleController {
         _connectionStateController.add(state);
         if (state == ConnectionState.connected) {
           _connectedDeviceId = device.id;
+          _resetAutoReconnect();
           // Save last device
           _di.preferencesRepository.saveLastDevice(device);
           // Start foreground service if enabled
@@ -183,6 +190,7 @@ class BleController {
             _foregroundService.stopBleKeepAliveService();
             _userInitiatedDisconnect = false;
           }
+          _scheduleAutoReconnect(settings);
         }
       },
       onError: (error) {
@@ -193,6 +201,7 @@ class BleController {
           _foregroundService.stopBleKeepAliveService();
           _userInitiatedDisconnect = false;
         }
+        _scheduleAutoReconnect(settings);
       },
     );
   }
@@ -201,17 +210,21 @@ class BleController {
   Future<void> _handleConnectionStateChange(
     ConnectionState state,
     BleDevice device,
-    dynamic settings,
+    BleSettings settings,
   ) async {
     if (state == ConnectionState.connected && settings.keepBleAliveInBackground) {
       final title = settings.backgroundServiceTitle ?? device.name;
       final text = settings.backgroundServiceText ?? 'Conectado e recebendo mensagens';
-      
+
       await _foregroundService.startBleKeepAliveService(
         deviceId: device.id,
         deviceName: device.name,
+        serviceUuid: settings.serviceUuid,
+        notifyCharacteristicUuid: settings.notifyCharacteristicUuid,
+        serverApiUrl: settings.serverApiUrl,
+        keepServiceWhenAppClosed: settings.keepServiceWhenAppClosed,
       );
-      
+
       // Update notification with custom title/text if provided
       if (settings.backgroundServiceTitle != null || settings.backgroundServiceText != null) {
         await _foregroundService.updateNotification(
@@ -225,6 +238,7 @@ class BleController {
   /// Disconnect
   Future<void> disconnect() async {
     _userInitiatedDisconnect = true;
+    _cancelAutoReconnect();
     await _di.disconnectDevice();
     _connectedDeviceId = null;
     // Stop foreground service
@@ -240,6 +254,7 @@ class BleController {
     _connectionSubscription?.cancel();
     _bluetoothSubscription?.cancel();
     _statusTimer?.cancel();
+    _autoReconnectTimer?.cancel();
     _scanResultsController.close();
     _connectionStateController.close();
     _isScanningController.close();
@@ -253,5 +268,76 @@ class BleController {
       const Duration(seconds: 2),
       (_) => refreshStatus(),
     );
+  }
+
+  Future<void> _attemptAutoReconnectOnStart() async {
+    try {
+      final settingsResult = await _di.loadSettings();
+      final settings = settingsResult.valueOrNull;
+      if (settings == null || !settings.autoReconnect) {
+        return;
+      }
+
+      final lastDevice = await _di.preferencesRepository.getLastDevice();
+      if (lastDevice == null) {
+        return;
+      }
+
+      if (_currentConnectionState != ConnectionState.disconnected) {
+        return;
+      }
+
+      _scheduleAutoReconnect(settings);
+    } catch (_) {
+      // Ignore auto reconnect errors at startup
+    }
+  }
+
+  void _scheduleAutoReconnect(BleSettings settings) {
+    if (!settings.autoReconnect || _userInitiatedDisconnect) return;
+    if (_autoReconnectTimer?.isActive ?? false) return;
+    if (_autoReconnectInProgress) return;
+
+    final nextAttempt = _autoReconnectAttempt + 1;
+    _autoReconnectAttempt = nextAttempt > 5 ? 5 : nextAttempt;
+    final delaySeconds = _autoReconnectAttempt <= 1
+        ? 2
+        : _autoReconnectAttempt <= 2
+            ? 4
+            : _autoReconnectAttempt <= 3
+                ? 6
+                : 8;
+
+    _autoReconnectTimer = Timer(Duration(seconds: delaySeconds), () async {
+      if (_userInitiatedDisconnect) return;
+      if (_currentConnectionState != ConnectionState.disconnected) return;
+
+      final hasPermissions = await PermissionHelper.checkBlePermissions();
+      if (!hasPermissions) return;
+
+      final bluetoothEnabled = await _di.bleRepository.isBluetoothEnabled();
+      if (!bluetoothEnabled) return;
+
+      final lastDevice = await _di.preferencesRepository.getLastDevice();
+      if (lastDevice == null) return;
+
+      _autoReconnectInProgress = true;
+      await connectToDevice(lastDevice);
+      _autoReconnectInProgress = false;
+    });
+  }
+
+  void _resetAutoReconnect() {
+    _autoReconnectAttempt = 0;
+    _autoReconnectInProgress = false;
+    _autoReconnectTimer?.cancel();
+    _autoReconnectTimer = null;
+  }
+
+  void _cancelAutoReconnect() {
+    _autoReconnectTimer?.cancel();
+    _autoReconnectTimer = null;
+    _autoReconnectInProgress = false;
+    _autoReconnectAttempt = 0;
   }
 }

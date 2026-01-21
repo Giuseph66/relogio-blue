@@ -34,6 +34,10 @@ class BleInteractor : public BleWriteHandler {
   bool _connected;
   uint32_t _lastNotifyAt;
   uint32_t _tickCounter;
+  bool _resetArmed;
+  uint32_t _resetArmedAt;
+  bool _awaitingAnswer;
+  uint32_t _questionStartTime;
 };
 
 #endif

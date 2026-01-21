@@ -36,7 +36,14 @@ class _ConnectDevicePageState extends State<ConnectDevicePage> with WidgetsBindi
     _bleController.scanResults.listen(
       (devices) {
         if (!mounted) return;
-        setState(() => _devices = devices);
+        // Filtrar dispositivos sem nome ou com nome "Unknown"
+        final filteredDevices = devices.where((device) {
+          final name = device.name.trim();
+          return name.isNotEmpty && 
+                 name.toLowerCase() != 'unknown' &&
+                 name.toLowerCase() != 'unknow';
+        }).toList();
+        setState(() => _devices = filteredDevices);
       },
       onError: _handleScanError,
     );
