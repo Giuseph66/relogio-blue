@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
-import '../../../../core/widgets/app_drawer.dart';
 import '../../../../core/routes/app_routes.dart';
-import '../controllers/messages_controller.dart';
-import '../controllers/ble_controller.dart';
-import '../../domain/entities/ble_message.dart';
-import '../../domain/repositories/ble_repository.dart' as ble;
+import '../../../ble_old/presentation/controllers/messages_controller.dart';
+import '../../../ble_old/presentation/controllers/ble_controller.dart';
+import '../../../ble_old/domain/entities/ble_message.dart';
+import '../../../ble_old/domain/repositories/ble_repository.dart' as ble;
 
-class MessagesPage extends StatefulWidget {
-  const MessagesPage({super.key});
+class ModernMessagesPage extends StatefulWidget {
+  const ModernMessagesPage({super.key});
 
   @override
-  State<MessagesPage> createState() => _MessagesPageState();
+  State<ModernMessagesPage> createState() => _ModernMessagesPageState();
 }
 
-class _MessagesPageState extends State<MessagesPage> {
+class _ModernMessagesPageState extends State<ModernMessagesPage> {
   late final MessagesController _messagesController;
   late final BleController _bleController;
   final TextEditingController _messageController = TextEditingController();
@@ -26,6 +25,7 @@ class _MessagesPageState extends State<MessagesPage> {
     _messagesController = MessagesController();
     _bleController = BleController();
     _bleController.connectionState.listen((state) {
+      if (!mounted) return;
       setState(() => _connectionState = state);
     });
   }
@@ -38,242 +38,291 @@ class _MessagesPageState extends State<MessagesPage> {
     super.dispose();
   }
 
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isConnected = _connectionState == ble.ConnectionState.connected;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mensagens'),
-        actions: [
-          IconButton(
-            tooltip: 'Configurações',
-            icon: const Icon(Icons.settings),
-            onPressed: () => Navigator.pushNamed(context, AppRoutes.settings),
-          ),
-        ],
+        title: const Text('Console'),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
       ),
-      drawer: const AppDrawer(),
       body: Column(
         children: [
-          StreamBuilder<TickStatus>(
-            stream: _messagesController.tickStatus,
-            initialData: const TickStatus(),
-            builder: (context, snapshot) {
-              final status = snapshot.data ?? const TickStatus();
-              return _buildTickStatus(status);
-            },
-          ),
-          Expanded(
-            child: StreamBuilder<List<BleMessage>>(
-              stream: _messagesController.messages,
-              builder: (context, snapshot) {
-                final allMessages = snapshot.data ?? [];
-                // Filter out "tick: ..." messages - they only update the status bar
-                final messages = allMessages.where((msg) {
-                  final content = msg.content.toLowerCase().trim();
-                  return !content.startsWith('tick:') && !content.startsWith('tick :');
-                }).toList();
-                
-                if (messages.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'Nenhuma mensagem ainda',
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                  );
-                }
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (_scrollController.hasClients) {
-                    _scrollController.animateTo(
-                      _scrollController.position.maxScrollExtent,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeOut,
-                    );
-                  }
-                });
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.all(16),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    return _buildMessageItem(messages[index]);
-                  },
-                );
-              },
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.black,
-              border: Border(top: BorderSide(color: Colors.white.withOpacity(0.2))),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _messageController,
-                        decoration: InputDecoration(
-                          hintText: 'Digite uma mensagem...',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          filled: true,
-                          fillColor: Colors.white.withOpacity(0.1),
-                        ),
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: _sendMessage,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.all(16),
-                      ),
-                      child: const Icon(Icons.send),
-                    ),
-                  ],
+          _buildStatusBar(),
+          if (!isConnected)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => Navigator.pushNamed(context, AppRoutes.connect),
+                  icon: const Icon(Icons.bluetooth_searching, size: 18),
+                  label: const Text('Conectar dispositivo'),
                 ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    _buildQuickButton('PING', () => _sendQuickMessage('PING')),
-                    _buildQuickButton('STATUS', () => _sendQuickMessage('STATUS')),
-                    _buildQuickButton('RESET', () => _sendQuickMessage('RESET')),
-                    _buildQuickButton('LED ON', () => _sendQuickMessage('LED_ON')),
-                    _buildQuickButton('LED OFF', () => _sendQuickMessage('LED_OFF')),
-                    _buildQuickButton('LED STATUS', () => _sendQuickMessage('LED_STATUS')),
-                  ],
-                ),
-              ],
+              ),
             ),
-          ),
+          Expanded(child: _buildMessageList()),
+          _buildQuickCommands(isConnected),
+          _buildInputArea(isConnected),
         ],
       ),
     );
   }
 
-  Widget _buildTickStatus(TickStatus status) {
-    final isOnline = status.online;
-    final tickLabel = status.tickNumber != null ? status.tickNumber.toString() : '--';
-    final timeLabel = status.lastSeen != null ? _formatTime(status.lastSeen!) : '--:--:--';
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withOpacity(0.15)),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.circle,
-            size: 10,
-            color: isOnline ? Colors.green : Colors.red,
+  Widget _buildStatusBar() {
+    return StreamBuilder<TickStatus>(
+      stream: _messagesController.tickStatus,
+      initialData: const TickStatus(),
+      builder: (context, snapshot) {
+        final status = snapshot.data ?? const TickStatus();
+        final isOnline = status.online;
+        
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(16),
           ),
-          const SizedBox(width: 8),
-          Text(
-            isOnline ? 'Online' : 'Offline',
-            style: TextStyle(
-              color: isOnline ? Colors.green : Colors.red,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const Spacer(),
-          Text(
-            'TICK: $tickLabel',
-            style: const TextStyle(color: Colors.white70),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            timeLabel,
-            style: const TextStyle(color: Colors.white70),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMessageItem(BleMessage message) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: message.isReceived
-            ? Colors.blue.withOpacity(0.2)
-            : Colors.green.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: message.isReceived ? Colors.blue : Colors.green,
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+          child: Row(
             children: [
-              Icon(
-                message.isReceived ? Icons.download : Icons.upload,
-                size: 16,
-                color: Colors.white,
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: isOnline ? Colors.greenAccent : Colors.redAccent,
+                  shape: BoxShape.circle,
+                ),
               ),
               const SizedBox(width: 8),
               Text(
-                message.isReceived ? 'RX' : 'TX',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
+                isOnline ? 'Conectado' : 'Offline',
+                style: TextStyle(
+                  color: isOnline ? Colors.greenAccent : Colors.redAccent,
                   fontSize: 12,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
               const Spacer(),
-              Text(
-                _formatTime(message.timestamp),
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
-              ),
+              _buildSmallBadge(_connectionLabel()),
+              const SizedBox(width: 8),
+              _buildSmallBadge('TICK: ${status.tickNumber ?? "--"}'),
+              const SizedBox(width: 8),
+              if (status.lastSeen != null)
+                _buildSmallBadge(_formatTime(status.lastSeen!)),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            message.content,
-            style: const TextStyle(color: Colors.white),
+        );
+      },
+    );
+  }
+
+  Widget _buildSmallBadge(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white10,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(text, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+    );
+  }
+
+  Widget _buildMessageList() {
+    return StreamBuilder<List<BleMessage>>(
+      stream: _messagesController.messages,
+      builder: (context, snapshot) {
+        final allMessages = snapshot.data ?? [];
+        final messages = allMessages.where((msg) {
+          final content = msg.content.toLowerCase().trim();
+          return !content.startsWith('tick:') && !content.startsWith('tick :');
+        }).toList();
+
+        if (messages.isEmpty) {
+          return const Center(child: Text('Nenhum log disponível', style: TextStyle(color: Colors.white24)));
+        }
+
+        _scrollToBottom();
+
+        return ListView.builder(
+          controller: _scrollController,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          itemCount: messages.length,
+          itemBuilder: (context, index) {
+            final msg = messages[index];
+            return _buildChatBubble(msg);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildChatBubble(BleMessage message) {
+    final bool isRx = message.isReceived;
+    return Align(
+      alignment: isRx ? Alignment.centerLeft : Alignment.centerRight,
+      child: Container(
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isRx ? Colors.white.withOpacity(0.08) : Colors.cyanAccent.withOpacity(0.15),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(20),
+            topRight: const Radius.circular(20),
+            bottomLeft: Radius.circular(isRx ? 4 : 20),
+            bottomRight: Radius.circular(isRx ? 20 : 4),
+          ),
+          border: Border.all(
+            color: isRx ? Colors.white10 : Colors.cyanAccent.withOpacity(0.3),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isRx ? Icons.south_west : Icons.north_east,
+                  size: 10,
+                  color: isRx ? Colors.white38 : Colors.cyanAccent,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  _formatTime(message.timestamp),
+                  style: const TextStyle(color: Colors.white24, fontSize: 9),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message.content,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickCommands(bool isConnected) {
+    final commands = ['PING', 'STATUS', 'RESET', 'LED_ON', 'LED_OFF', 'TIME'];
+    return Container(
+      height: 40,
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        scrollDirection: Axis.horizontal,
+        itemCount: commands.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          return ActionChip(
+            label: Text(commands[index], style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+            backgroundColor: Colors.white10,
+            labelStyle: TextStyle(color: isConnected ? Colors.white70 : Colors.white30),
+            onPressed: isConnected ? () => _sendMessage(commands[index]) : null,
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildInputArea(bool isConnected) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _messageController,
+              onSubmitted: (_) => _sendMessage(),
+              enabled: isConnected,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Enviar comando...',
+                hintStyle: const TextStyle(color: Colors.white30),
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.05),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: isConnected ? _sendMessage : null,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.send,
+                color: isConnected ? Colors.black : Colors.black38,
+                size: 20,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildQuickButton(String label, VoidCallback onPressed) {
-    return ElevatedButton(
-      onPressed: onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.white.withOpacity(0.2),
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      ),
-      child: Text(label),
-    );
-  }
+  Future<void> _sendMessage([String? text]) async {
+    if (_connectionState != ble.ConnectionState.connected) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Dispositivo desconectado. Conecte antes de enviar comandos.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
-  void _sendMessage() {
-    final text = _messageController.text.trim();
-    if (text.isNotEmpty) {
-      _messagesController.sendMessage(text);
-      _messageController.clear();
+    final content = text ?? _messageController.text.trim();
+    if (content.isNotEmpty) {
+      final sent = await _messagesController.sendMessage(content);
+      if (!sent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Falha ao enviar mensagem para o dispositivo'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      if (text == null) _messageController.clear();
+      _scrollToBottom();
     }
   }
 
-  void _sendQuickMessage(String message) {
-    _messagesController.sendMessage(message);
+  String _connectionLabel() {
+    return switch (_connectionState) {
+      ble.ConnectionState.disconnected => 'BLE: desconectado',
+      ble.ConnectionState.connecting => 'BLE: conectando',
+      ble.ConnectionState.connected => 'BLE: conectado',
+      ble.ConnectionState.disconnecting => 'BLE: desconectando',
+    };
   }
 
   String _formatTime(DateTime time) {

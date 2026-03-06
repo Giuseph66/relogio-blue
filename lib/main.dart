@@ -5,12 +5,17 @@ import 'core/di/dependency_injection.dart';
 import 'core/background/ble_foreground_service.dart';
 import 'core/notifications/notification_service.dart';
 
+import 'core/ui_mode/ui_mode_manager.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Initialize background services
   await NotificationService().init();
   await BleForegroundServiceManager().init();
+  
+  // Initialize UI Mode State
+  await UiModeManager().init();
   
   // Initialize dependency injection
   await DependencyInjection().initialize(mockMode: false);
@@ -23,11 +28,16 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Relógio App',
-      theme: AppTheme.darkTheme,
-      initialRoute: AppRoutes.dashboard,
-      onGenerateRoute: AppRoutes.generateRoute,
+    return ValueListenableBuilder<bool>(
+      valueListenable: UiModeManager().useModernUiNotifier,
+      builder: (context, isModernUi, child) {
+        return MaterialApp(
+          title: 'Relógio App',
+          theme: AppTheme.darkTheme,
+          initialRoute: AppRoutes.dashboard,
+          onGenerateRoute: AppRoutes.generateRoute,
+        );
+      },
     );
   }
 }

@@ -1,29 +1,31 @@
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
-import '../../../features/ble/data/datasources/reactive_ble_datasource.dart';
-import '../../../features/ble/data/datasources/preferences_datasource.dart';
-import '../../../features/ble/data/repositories/ble_repository_impl.dart';
-import '../../../features/ble/data/repositories/preferences_repository_impl.dart';
-import '../../../features/ble/domain/repositories/ble_repository.dart';
-import '../../../features/ble/domain/repositories/preferences_repository.dart';
-import '../../../features/ble/domain/usecases/start_ble_scan.dart';
-import '../../../features/ble/domain/usecases/stop_ble_scan.dart';
-import '../../../features/ble/domain/usecases/connect_to_device.dart';
-import '../../../features/ble/domain/usecases/disconnect_device.dart';
-import '../../../features/ble/domain/usecases/send_ble_message.dart';
-import '../../../features/ble/domain/usecases/subscribe_to_messages.dart';
-import '../../../features/ble/domain/usecases/load_settings.dart';
-import '../../../features/ble/domain/usecases/save_settings.dart';
-import '../../../features/ble/domain/usecases/auto_reconnect_if_enabled.dart';
-import '../../../features/ble/data/models/ble_settings_model.dart';
+import '../../../features/ble_old/data/datasources/reactive_ble_datasource.dart';
+import '../../../features/ble_old/data/datasources/preferences_datasource.dart';
+import '../../../features/ble_old/data/repositories/ble_repository_impl.dart';
+import '../../../features/ble_old/data/repositories/preferences_repository_impl.dart';
+import '../../../features/ble_old/domain/repositories/ble_repository.dart';
+import '../../../features/ble_old/domain/repositories/preferences_repository.dart';
+import '../../../features/ble_old/domain/usecases/start_ble_scan.dart';
+import '../../../features/ble_old/domain/usecases/stop_ble_scan.dart';
+import '../../../features/ble_old/domain/usecases/connect_to_device.dart';
+import '../../../features/ble_old/domain/usecases/disconnect_device.dart';
+import '../../../features/ble_old/domain/usecases/send_ble_message.dart';
+import '../../../features/ble_old/domain/usecases/subscribe_to_messages.dart';
+import '../../../features/ble_old/domain/usecases/load_settings.dart';
+import '../../../features/ble_old/domain/usecases/save_settings.dart';
+import '../../../features/ble_old/domain/usecases/auto_reconnect_if_enabled.dart';
+import '../../../features/ble_old/data/models/ble_settings_model.dart';
 import '../background/ble_foreground_service.dart';
 import '../notifications/notification_service.dart';
-import '../../../features/maps/data/datasources/geolocator_datasource.dart';
-import '../../../features/maps/data/datasources/geocoding_datasource.dart';
-import '../../../features/maps/data/repositories/location_repository_impl.dart';
-import '../../../features/maps/domain/repositories/location_repository.dart';
-import '../../../features/maps/domain/usecases/get_current_location.dart';
-import '../../../features/maps/domain/usecases/reverse_geocode.dart';
-import '../../../features/maps/presentation/controllers/map_controller.dart';
+import '../../../features/maps_old/data/datasources/geolocator_datasource.dart';
+import '../../../features/maps_old/data/datasources/geocoding_datasource.dart';
+import '../../../features/maps_old/data/repositories/location_repository_impl.dart';
+import '../../../features/maps_old/domain/repositories/location_repository.dart';
+import '../../../features/maps_old/domain/usecases/get_current_location.dart';
+import '../../../features/maps_old/domain/usecases/reverse_geocode.dart';
+import '../../../features/maps_old/presentation/controllers/map_controller.dart';
+import '../../../features/location_tracker/data/repositories/location_tracker_repository.dart';
+import '../../../features/location_tracker/presentation/controllers/location_tracker_controller.dart';
 
 /// Simple dependency injection container
 class DependencyInjection {
@@ -60,6 +62,9 @@ class DependencyInjection {
   late final MapController _mapController;
 
   bool _initialized = false;
+
+  late final LocationTrackerRepository _locationTrackerRepository;
+  late final LocationTrackerController _locationTrackerController;
 
   /// Initialize dependencies
   Future<void> initialize({bool mockMode = false}) async {
@@ -114,6 +119,12 @@ class DependencyInjection {
       _locationRepository,
     );
 
+    _locationTrackerRepository = LocationTrackerRepository();
+    _locationTrackerController = LocationTrackerController(
+      repository: _locationTrackerRepository,
+    );
+    await _locationTrackerController.loadData();
+
     _initialized = true;
   }
 
@@ -130,11 +141,12 @@ class DependencyInjection {
   BleRepository get bleRepository => _bleRepository;
   PreferencesRepository get preferencesRepository => _preferencesRepository;
   
-  // Maps
   LocationRepository get locationRepository => _locationRepository;
   GetCurrentLocation get getCurrentLocation => _getCurrentLocation;
   ReverseGeocode get reverseGeocode => _reverseGeocode;
   MapController get mapController => _mapController;
+  LocationTrackerRepository get locationTrackerRepository => _locationTrackerRepository;
+  LocationTrackerController get locationTrackerController => _locationTrackerController;
   
   // Background services (singletons, can be accessed directly or via DI)
   BleForegroundServiceManager get foregroundService => BleForegroundServiceManager();

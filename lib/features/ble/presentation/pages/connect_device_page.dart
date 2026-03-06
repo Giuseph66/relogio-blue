@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:app_settings/app_settings.dart';
-import '../../../../core/widgets/app_drawer.dart';
 import '../../../../core/routes/app_routes.dart';
-import '../../../../core/ble/ble_errors.dart';
 import '../../../../core/permissions/permission_helper.dart';
-import '../controllers/ble_controller.dart';
-import '../../domain/entities/ble_device.dart';
+import '../../../../core/ble/ble_errors.dart';
+import '../../../ble_old/presentation/controllers/ble_controller.dart';
+import '../../../ble_old/domain/entities/ble_device.dart';
 
-class ConnectDevicePage extends StatefulWidget {
-  const ConnectDevicePage({super.key});
+class ModernConnectDevicePage extends StatefulWidget {
+  const ModernConnectDevicePage({super.key});
 
   @override
-  State<ConnectDevicePage> createState() => _ConnectDevicePageState();
+  State<ModernConnectDevicePage> createState() => _ModernConnectDevicePageState();
 }
 
-class _ConnectDevicePageState extends State<ConnectDevicePage> with WidgetsBindingObserver {
+class _ModernConnectDevicePageState extends State<ModernConnectDevicePage> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final BleController _bleController;
+  late AnimationController _radarController;
   final TextEditingController _filterController = TextEditingController();
   List<BleDevice> _devices = [];
   bool _isScanning = false;
@@ -27,6 +27,11 @@ class _ConnectDevicePageState extends State<ConnectDevicePage> with WidgetsBindi
   void initState() {
     super.initState();
     _bleController = BleController();
+    _radarController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    );
+    
     WidgetsBinding.instance.addObserver(this);
     _setupListeners();
     _bleController.refreshStatus();
@@ -36,21 +41,29 @@ class _ConnectDevicePageState extends State<ConnectDevicePage> with WidgetsBindi
     _bleController.scanResults.listen(
       (devices) {
         if (!mounted) return;
-        // Filtrar dispositivos sem nome ou com nome "Unknown"
         final filteredDevices = devices.where((device) {
           final name = device.name.trim();
-          return name.isNotEmpty && 
-                 name.toLowerCase() != 'unknown' &&
-                 name.toLowerCase() != 'unknow';
+          return name.isNotEmpty &&
+              name.toLowerCase() != 'unknown' &&
+              name.toLowerCase() != 'unknow';
         }).toList();
         setState(() => _devices = filteredDevices);
       },
       onError: _handleScanError,
     );
+
     _bleController.isScanning.listen((scanning) {
       if (!mounted) return;
-      setState(() => _isScanning = scanning);
+      setState(() {
+        _isScanning = scanning;
+        if (scanning) {
+          _radarController.repeat();
+        } else {
+          _radarController.stop();
+        }
+      });
     });
+
     _bleController.bluetoothEnabled.listen(_handleBluetoothStatus);
     _bleController.permissionsGranted.listen((granted) {
       if (!mounted) return;
@@ -62,6 +75,7 @@ class _ConnectDevicePageState extends State<ConnectDevicePage> with WidgetsBindi
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _bleController.dispose();
+    _radarController.dispose();
     _filterController.dispose();
     super.dispose();
   }
@@ -77,101 +91,169 @@ class _ConnectDevicePageState extends State<ConnectDevicePage> with WidgetsBindi
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Conectar Dispositivo'),
-        actions: [
-          IconButton(
-            tooltip: 'Configurações',
-            icon: const Icon(Icons.settings),
-            onPressed: () => Navigator.pushNamed(context, AppRoutes.settings),
-          ),
-        ],
+        title: const Text('Dispositivos'),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
       ),
-      drawer: const AppDrawer(),
       body: Column(
         children: [
           if (!_bluetoothEnabled || !_permissionsGranted)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
               child: _buildStatusAlert(),
             ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              controller: _filterController,
-              decoration: InputDecoration(
-                labelText: 'Filtrar por nome',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _filterController.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _filterController.clear();
-                          _startScan();
-                        },
-                      )
-                    : null,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.1),
-              ),
-              style: const TextStyle(color: Colors.white),
-              onChanged: (_) => _startScan(),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _isScanning ? _stopScan : _startScan,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                    ),
-                    child: Text(_isScanning ? 'Parar Busca' : 'Iniciar Busca'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: _devices.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.bluetooth_disabled,
-                          size: 64,
-                          color: Colors.white.withOpacity(0.5),
+          _buildRadarSection(),
+          _buildSearchField(),
+          Expanded(child: _buildDeviceList()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRadarSection() {
+    return Container(
+      height: 200,
+      width: double.infinity,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          AnimatedBuilder(
+            animation: _radarController,
+            builder: (context, child) {
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  for (int i = 0; i < 3; i++)
+                    Container(
+                      width: 100 + (100 * ((_radarController.value + (i / 3)) % 1.0)),
+                      height: 100 + (100 * ((_radarController.value + (i / 3)) % 1.0)),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.cyanAccent.withOpacity(1.0 - ((_radarController.value + (i / 3)) % 1.0)),
+                          width: 2,
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _isScanning
-                              ? 'Buscando dispositivos...'
-                              : 'Nenhum dispositivo encontrado',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.7),
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  )
-                : ListView.builder(
-                    itemCount: _devices.length,
-                    itemBuilder: (context, index) {
-                      final device = _devices[index];
-                      return _buildDeviceItem(device);
-                    },
-                  ),
+                ],
+              );
+            },
+          ),
+          IconButton(
+            iconSize: 64,
+            icon: Icon(
+              _isScanning ? Icons.stop_circle : Icons.play_circle_fill,
+              color: Colors.cyanAccent,
+            ),
+            onPressed: _isScanning ? _stopScan : _startScan,
+          ),
+          Positioned(
+            bottom: 10,
+            child: Text(
+              _isScanning ? 'Procurando...' : 'Iniciar Busca',
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      child: TextField(
+        controller: _filterController,
+        onChanged: (_) => _startScan(),
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          hintText: 'Filtrar dispositivos...',
+          hintStyle: const TextStyle(color: Colors.white38),
+          prefixIcon: const Icon(Icons.search, color: Colors.white54),
+          filled: true,
+          fillColor: Colors.white.withOpacity(0.05),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeviceList() {
+    if (_devices.isEmpty && !_isScanning) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.bluetooth_disabled, size: 48, color: Colors.white24),
+            const SizedBox(height: 16),
+            const Text('Nenhum dispositivo encontrado', style: TextStyle(color: Colors.white54)),
+            TextButton(onPressed: _startScan, child: const Text('Tentar novamente')),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      itemCount: _devices.length,
+      itemBuilder: (context, index) {
+        final device = _devices[index];
+        return _buildDeviceTile(device);
+      },
+    );
+  }
+
+  Widget _buildDeviceTile(BleDevice device) {
+    final rssi = device.rssi ?? -100;
+    Color signalColor = Colors.red;
+    if (rssi > -60) signalColor = Colors.greenAccent;
+    else if (rssi > -85) signalColor = Colors.orangeAccent;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: device.isPreferred ? Colors.cyanAccent.withOpacity(0.3) : Colors.white.withOpacity(0.1),
+        ),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: signalColor.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(Icons.bluetooth, color: signalColor),
+        ),
+        title: Text(
+          device.name,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text('ID: ${device.id}', style: const TextStyle(color: Colors.white38, fontSize: 10)),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('${rssi}dBm', style: TextStyle(color: signalColor, fontSize: 10)),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: () => _connectToDevice(device),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+              ),
+              child: const Text('Conectar', style: TextStyle(fontSize: 12)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -209,29 +291,28 @@ class _ConnectDevicePageState extends State<ConnectDevicePage> with WidgetsBindi
         TextButton(
           onPressed: () => PermissionHelper.openAppSettings(),
           style: TextButton.styleFrom(foregroundColor: Colors.white70),
-          child: const Text('Abrir configurações do app'),
+          child: const Text('Abrir config do app'),
         ),
     ];
 
     return Container(
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.red.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.red.withOpacity(0.4)),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.red.withOpacity(0.35)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(
             children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.red, size: 24),
-              SizedBox(width: 10),
+              Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+              SizedBox(width: 8),
               Text(
                 'Atenção',
                 style: TextStyle(
-                  color: Colors.red,
-                  fontSize: 16,
+                  color: Colors.redAccent,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -243,56 +324,23 @@ class _ConnectDevicePageState extends State<ConnectDevicePage> with WidgetsBindi
               padding: const EdgeInsets.only(bottom: 6),
               child: Text(
                 message,
-                style: const TextStyle(color: Colors.white70, fontSize: 14),
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
               ),
             ),
-          if (actions.isNotEmpty)
-            Wrap(
-              spacing: 10,
-              runSpacing: 8,
-              children: actions,
-            ),
+          Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            children: actions,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildDeviceItem(BleDevice device) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: Colors.white.withOpacity(0.1),
-      child: ListTile(
-        leading: Icon(
-          Icons.bluetooth,
-          color: device.isPreferred ? Colors.green : Colors.white,
-        ),
-        title: Text(
-          device.name,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('ID: ${device.id}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-            if (device.rssi != null)
-              Text('RSSI: ${device.rssi} dBm', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-          ],
-        ),
-        trailing: ElevatedButton(
-          onPressed: () => _connectToDevice(device),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.black,
-          ),
-          child: const Text('Conectar'),
-        ),
-      ),
-    );
-  }
-
   void _startScan() {
-    final filter = _filterController.text.trim();
-    _bleController.startScan(filterByName: filter.isEmpty ? null : filter);
+    _bleController.startScan(
+      filterByName: _filterController.text.isEmpty ? null : _filterController.text,
+    );
   }
 
   void _stopScan() {
@@ -301,7 +349,7 @@ class _ConnectDevicePageState extends State<ConnectDevicePage> with WidgetsBindi
 
   void _connectToDevice(BleDevice device) {
     _bleController.connectToDevice(device);
-    Navigator.pushNamed(context, AppRoutes.messages);
+    Navigator.of(context).pushNamed(AppRoutes.messages);
   }
 
   void _handleBluetoothStatus(bool enabled) {

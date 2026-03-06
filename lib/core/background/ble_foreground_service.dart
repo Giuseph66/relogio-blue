@@ -9,6 +9,8 @@ import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import '../ble/ble_constants.dart';
 import '../logger/app_logger.dart';
 import '../network/ble_message_relay.dart';
+import '../notifications/message_notification_filter.dart';
+import '../notifications/notification_service.dart';
 
 const String _kDeviceIdKey = 'ble_device_id';
 const String _kDeviceNameKey = 'ble_device_name';
@@ -16,6 +18,9 @@ const String _kServiceUuidKey = 'ble_service_uuid';
 const String _kNotifyUuidKey = 'ble_notify_uuid';
 const String _kServerApiUrlKey = 'ble_server_api_url';
 const String _kKeepServiceWhenClosedKey = 'ble_keep_when_closed';
+const String _kBackgroundNotifyOnRxKey = 'ble_background_notify_rx';
+const String _kBackgroundNotifyFilterEnabledKey = 'ble_notify_filter_enabled';
+const String _kBackgroundNotifyPatternsKey = 'ble_notify_patterns_json';
 
 const Duration _kHeartbeatTimeout = Duration(seconds: 3);
 
@@ -75,6 +80,9 @@ class BleForegroundServiceManager {
     required String notifyCharacteristicUuid,
     String? serverApiUrl,
     bool keepServiceWhenAppClosed = true,
+    bool backgroundNotifyOnRx = true,
+    bool backgroundNotifyFilterEnabled = false,
+    List<String> backgroundNotifyAllowedPatterns = const [],
   }) async {
     if (!_initialized) {
       await init();
@@ -87,6 +95,9 @@ class BleForegroundServiceManager {
       notifyCharacteristicUuid: notifyCharacteristicUuid,
       serverApiUrl: serverApiUrl,
       keepServiceWhenAppClosed: keepServiceWhenAppClosed,
+      backgroundNotifyOnRx: backgroundNotifyOnRx,
+      backgroundNotifyFilterEnabled: backgroundNotifyFilterEnabled,
+      backgroundNotifyAllowedPatterns: backgroundNotifyAllowedPatterns,
     );
 
     if (await FlutterForegroundTask.isRunningService) {
@@ -100,6 +111,9 @@ class BleForegroundServiceManager {
         notifyCharacteristicUuid: notifyCharacteristicUuid,
         serverApiUrl: serverApiUrl,
         keepServiceWhenAppClosed: keepServiceWhenAppClosed,
+        backgroundNotifyOnRx: backgroundNotifyOnRx,
+        backgroundNotifyFilterEnabled: backgroundNotifyFilterEnabled,
+        backgroundNotifyAllowedPatterns: backgroundNotifyAllowedPatterns,
       );
       _startHeartbeat();
       return true;
@@ -113,6 +127,9 @@ class BleForegroundServiceManager {
         notifyCharacteristicUuid: notifyCharacteristicUuid,
         serverApiUrl: serverApiUrl,
         keepServiceWhenAppClosed: keepServiceWhenAppClosed,
+        backgroundNotifyOnRx: backgroundNotifyOnRx,
+        backgroundNotifyFilterEnabled: backgroundNotifyFilterEnabled,
+        backgroundNotifyAllowedPatterns: backgroundNotifyAllowedPatterns,
       );
       _startHeartbeat();
       AppLogger.debug('Servico ja esta rodando para este dispositivo');
@@ -141,6 +158,9 @@ class BleForegroundServiceManager {
         notifyCharacteristicUuid: notifyCharacteristicUuid,
         serverApiUrl: serverApiUrl,
         keepServiceWhenAppClosed: keepServiceWhenAppClosed,
+        backgroundNotifyOnRx: backgroundNotifyOnRx,
+        backgroundNotifyFilterEnabled: backgroundNotifyFilterEnabled,
+        backgroundNotifyAllowedPatterns: backgroundNotifyAllowedPatterns,
       );
       _startHeartbeat();
       AppLogger.info('Foreground service iniciado para dispositivo: $deviceId');
@@ -215,6 +235,9 @@ class BleForegroundServiceManager {
     String? deviceName,
     String? serverApiUrl,
     bool keepServiceWhenAppClosed = true,
+    bool backgroundNotifyOnRx = true,
+    bool backgroundNotifyFilterEnabled = false,
+    List<String> backgroundNotifyAllowedPatterns = const [],
   }) async {
     await FlutterForegroundTask.saveData(key: _kDeviceIdKey, value: deviceId);
     await FlutterForegroundTask.saveData(key: _kServiceUuidKey, value: serviceUuid);
@@ -234,6 +257,18 @@ class BleForegroundServiceManager {
       key: _kKeepServiceWhenClosedKey,
       value: keepServiceWhenAppClosed,
     );
+    await FlutterForegroundTask.saveData(
+      key: _kBackgroundNotifyOnRxKey,
+      value: backgroundNotifyOnRx,
+    );
+    await FlutterForegroundTask.saveData(
+      key: _kBackgroundNotifyFilterEnabledKey,
+      value: backgroundNotifyFilterEnabled,
+    );
+    await FlutterForegroundTask.saveData(
+      key: _kBackgroundNotifyPatternsKey,
+      value: jsonEncode(backgroundNotifyAllowedPatterns),
+    );
   }
 
   Future<void> _clearConfig() async {
@@ -243,6 +278,9 @@ class BleForegroundServiceManager {
     await FlutterForegroundTask.removeData(key: _kDeviceNameKey);
     await FlutterForegroundTask.removeData(key: _kServerApiUrlKey);
     await FlutterForegroundTask.removeData(key: _kKeepServiceWhenClosedKey);
+    await FlutterForegroundTask.removeData(key: _kBackgroundNotifyOnRxKey);
+    await FlutterForegroundTask.removeData(key: _kBackgroundNotifyFilterEnabledKey);
+    await FlutterForegroundTask.removeData(key: _kBackgroundNotifyPatternsKey);
   }
 
   void _sendConfigToTask({
@@ -252,6 +290,9 @@ class BleForegroundServiceManager {
     String? deviceName,
     String? serverApiUrl,
     bool keepServiceWhenAppClosed = true,
+    bool backgroundNotifyOnRx = true,
+    bool backgroundNotifyFilterEnabled = false,
+    List<String> backgroundNotifyAllowedPatterns = const [],
   }) {
     FlutterForegroundTask.sendDataToTask({
       'type': 'config',
@@ -261,6 +302,9 @@ class BleForegroundServiceManager {
       'notifyUuid': notifyCharacteristicUuid,
       'serverApiUrl': serverApiUrl,
       'keepWhenClosed': keepServiceWhenAppClosed,
+      'backgroundNotifyOnRx': backgroundNotifyOnRx,
+      'backgroundNotifyFilterEnabled': backgroundNotifyFilterEnabled,
+      'backgroundNotifyAllowedPatterns': backgroundNotifyAllowedPatterns,
     });
   }
 
@@ -282,6 +326,7 @@ class BleForegroundServiceManager {
 class BleForegroundTaskHandler extends TaskHandler {
   final FlutterReactiveBle _ble = FlutterReactiveBle();
   final BleMessageRelayService _relay = BleMessageRelayService();
+  final NotificationService _notificationService = NotificationService();
 
   StreamSubscription<ConnectionStateUpdate>? _connectionSubscription;
   StreamSubscription<List<int>>? _notifySubscription;
@@ -292,6 +337,9 @@ class BleForegroundTaskHandler extends TaskHandler {
   String? _notifyUuid;
   String? _serverApiUrl;
   bool _keepServiceWhenClosed = true;
+  bool _backgroundNotifyOnRx = true;
+  bool _backgroundNotifyFilterEnabled = false;
+  List<String> _backgroundNotifyAllowedPatterns = const [];
 
   bool _isConnected = false;
   bool _isConnecting = false;
@@ -302,6 +350,7 @@ class BleForegroundTaskHandler extends TaskHandler {
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     await _loadConfigFromStorage();
+    await _notificationService.init();
     _lastHeartbeatAt = DateTime.now();
     AppLogger.info(
       'FG task start | device=$_deviceId keepClosed=$_keepServiceWhenClosed',
@@ -337,6 +386,14 @@ class BleForegroundTaskHandler extends TaskHandler {
         final deviceName = data['deviceName'] as String?;
         final serverApiUrl = data['serverApiUrl'] as String?;
         final keepWhenClosed = data['keepWhenClosed'] as bool? ?? true;
+        final backgroundNotifyOnRx = data['backgroundNotifyOnRx'] as bool? ?? true;
+        final backgroundNotifyFilterEnabled =
+            data['backgroundNotifyFilterEnabled'] as bool? ?? false;
+        final backgroundNotifyAllowedPatterns =
+            (data['backgroundNotifyAllowedPatterns'] as List<dynamic>?)
+                    ?.map((value) => value.toString())
+                    .toList() ??
+                const <String>[];
         final shouldReconnect = _deviceId != deviceId ||
             _serviceUuid != serviceUuid ||
             _notifyUuid != notifyUuid;
@@ -347,8 +404,11 @@ class BleForegroundTaskHandler extends TaskHandler {
         _deviceName = deviceName;
         _serverApiUrl = serverApiUrl;
         _keepServiceWhenClosed = keepWhenClosed;
+        _backgroundNotifyOnRx = backgroundNotifyOnRx;
+        _backgroundNotifyFilterEnabled = backgroundNotifyFilterEnabled;
+        _backgroundNotifyAllowedPatterns = backgroundNotifyAllowedPatterns;
         AppLogger.info(
-          'FG config | device=$_deviceId service=$_serviceUuid notify=$_notifyUuid keepClosed=$_keepServiceWhenClosed',
+          'FG config | device=$_deviceId service=$_serviceUuid notify=$_notifyUuid keepClosed=$_keepServiceWhenClosed notifyOnRx=$_backgroundNotifyOnRx filterEnabled=$_backgroundNotifyFilterEnabled filters=${_backgroundNotifyAllowedPatterns.length}',
         );
 
         if (shouldReconnect) {
@@ -382,6 +442,17 @@ class BleForegroundTaskHandler extends TaskHandler {
     _keepServiceWhenClosed =
         await FlutterForegroundTask.getData<bool>(key: _kKeepServiceWhenClosedKey) ??
             true;
+    _backgroundNotifyOnRx =
+        await FlutterForegroundTask.getData<bool>(key: _kBackgroundNotifyOnRxKey) ??
+            true;
+    _backgroundNotifyFilterEnabled = await FlutterForegroundTask.getData<bool>(
+          key: _kBackgroundNotifyFilterEnabledKey,
+        ) ??
+        false;
+    final patternsJson = await FlutterForegroundTask.getData<String>(
+      key: _kBackgroundNotifyPatternsKey,
+    );
+    _backgroundNotifyAllowedPatterns = _parsePatterns(patternsJson);
   }
 
   bool _isAppAlive() {
@@ -483,6 +554,10 @@ class BleForegroundTaskHandler extends TaskHandler {
   }
 
   void _handleIncomingMessage(String content) {
+    if (MessageNotificationFilter.isTickMessage(content)) {
+      return;
+    }
+
     AppLogger.debug('FG RX: $content');
     final preview = content.length > 50 ? '${content.substring(0, 47)}...' : content;
     FlutterForegroundTask.updateService(
@@ -492,12 +567,22 @@ class BleForegroundTaskHandler extends TaskHandler {
 
     final serverUrl = _serverApiUrl?.trim() ?? '';
     if (serverUrl.isNotEmpty) {
-      _relay.sendRxMessage(
+      unawaited(_relay.sendRxMessage(
         baseUrl: serverUrl,
         content: content,
         deviceId: _deviceId,
         deviceName: _deviceName,
-      );
+      ));
+    }
+
+    final shouldNotify = MessageNotificationFilter.shouldNotify(
+      content: content,
+      notificationsEnabled: _backgroundNotifyOnRx,
+      filterEnabled: _backgroundNotifyFilterEnabled,
+      allowedPatterns: _backgroundNotifyAllowedPatterns,
+    );
+    if (shouldNotify) {
+      unawaited(_notificationService.showRxNotification(content));
     }
   }
 
@@ -508,6 +593,25 @@ class BleForegroundTaskHandler extends TaskHandler {
       final hex = data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
       return 'HEX: $hex';
     }
+  }
+
+  List<String> _parsePatterns(String? raw) {
+    if (raw == null || raw.trim().isEmpty) {
+      return const [];
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List<dynamic>) {
+        return decoded
+            .map((item) => item.toString().trim())
+            .where((item) => item.isNotEmpty)
+            .toList();
+      }
+    } catch (_) {
+      // Keep defaults when parsing fails.
+    }
+    return const [];
   }
 
   Future<void> _disconnect() async {
@@ -556,5 +660,7 @@ class BleForegroundTaskHandler extends TaskHandler {
 /// Foreground task entrypoint (top-level).
 @pragma('vm:entry-point')
 void bleForegroundTaskStartCallback() {
+  WidgetsFlutterBinding.ensureInitialized();
+  DartPluginRegistrant.ensureInitialized();
   FlutterForegroundTask.setTaskHandler(BleForegroundTaskHandler());
 }

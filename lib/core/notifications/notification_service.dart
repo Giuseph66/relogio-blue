@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../logger/app_logger.dart';
 
 /// Service for managing local notifications
@@ -16,6 +17,17 @@ class NotificationService {
     if (_initialized) return;
 
     try {
+      // On Android 13+ (API 33), POST_NOTIFICATIONS must be requested at runtime
+      if (Platform.isAndroid) {
+        final status = await Permission.notification.status;
+        if (!status.isGranted) {
+          final result = await Permission.notification.request();
+          AppLogger.info('Permissão de notificação: $result');
+          if (result.isPermanentlyDenied) {
+            AppLogger.warning('Notificações bloqueadas permanentemente pelo usuário');
+          }
+        }
+      }
       // Android initialization settings
       const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
       
@@ -77,16 +89,18 @@ class NotificationService {
 
     try {
       // Truncate preview if too long
-      final displayText = preview.length > 100 
-          ? '${preview.substring(0, 97)}...' 
+      final displayText = preview.length > 100
+          ? '${preview.substring(0, 97)}...'
           : preview;
 
-      const androidDetails = AndroidNotificationDetails(
+      final androidDetails = AndroidNotificationDetails(
         'ble_messages_channel',
         'Mensagens BLE',
         channelDescription: 'Notificações de mensagens recebidas do relógio',
-        importance: Importance.defaultImportance,
-        priority: Priority.defaultPriority,
+        importance: Importance.high,
+        priority: Priority.high,
+        category: AndroidNotificationCategory.message,
+        styleInformation: BigTextStyleInformation(displayText),
         showWhen: true,
         playSound: false,
         enableVibration: false,
@@ -99,14 +113,15 @@ class NotificationService {
         presentSound: false,
       );
 
-      const details = NotificationDetails(
+      final details = NotificationDetails(
         android: androidDetails,
         iOS: iosDetails,
       );
 
+      // Fixed ID so each new message REPLACES the previous notification
       await _notifications.show(
-        DateTime.now().millisecondsSinceEpoch % 100000,
-        'Mensagem recebida do relógio',
+        42,
+        'Relógio',
         displayText,
         details,
       );
@@ -132,4 +147,3 @@ class NotificationService {
   /// Check if service is initialized
   bool get isInitialized => _initialized;
 }
-
