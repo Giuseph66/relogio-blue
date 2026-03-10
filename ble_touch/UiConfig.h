@@ -1,0 +1,9 @@
+#ifndef UI_CONFIG_H
+#define UI_CONFIG_H
+
+#define UI_TITLE "BLE TOUCH"
+#define UI_MAIN_REDRAW_MS 120
+#define UI_QUESTION_REDRAW_MS 80
+#define UI_QUESTION_TIMEOUT_MS 10000
+
+#endif

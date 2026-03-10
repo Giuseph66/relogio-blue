@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import '../../../../core/ble/ble_constants.dart';
+import '../../../../core/ble/ble_question_protocol.dart';
 import '../../../../core/logger/app_logger.dart';
 import '../../domain/entities/ble_device.dart';
 import '../../domain/entities/ble_settings.dart';
@@ -335,10 +336,17 @@ class ReactiveBleDataSource {
   void _mockWrite(List<int> data) {
     final message = String.fromCharCodes(data);
     AppLogger.debug('Enviado (Simulado): $message');
-    
-    // Echo response after delay
+
     Timer(Duration(milliseconds: 300 + math.Random().nextInt(500)), () {
-      final response = 'OK: $message';
+      final prompt = tryParseBleQuestionCommand(message);
+      String response;
+
+      if (prompt != null && prompt.options.isNotEmpty) {
+        response = '$bleQuestionAnswerHeader|${prompt.questionId}|${prompt.options.first.id}';
+      } else {
+        response = 'OK: $message';
+      }
+
       final responseData = response.codeUnits;
       _notifyController?.add(responseData);
       AppLogger.debug('Resposta simulada: $response');
@@ -355,9 +363,7 @@ class ReactiveBleDataSource {
       return _notifyController?.stream ?? const Stream.empty();
     }
 
-    if (_notifyController == null) {
-      _notifyController = StreamController<List<int>>.broadcast();
-    }
+    _notifyController ??= StreamController<List<int>>.broadcast();
 
     return _notifyController!.stream;
   }

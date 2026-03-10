@@ -21,7 +21,6 @@ class _ConnectDevicePageState extends State<ConnectDevicePage> with WidgetsBindi
   bool _isScanning = false;
   bool _bluetoothEnabled = false;
   bool _permissionsGranted = false;
-  bool _hasPromptedBluetoothOff = false;
 
   @override
   void initState() {
@@ -307,22 +306,17 @@ class _ConnectDevicePageState extends State<ConnectDevicePage> with WidgetsBindi
   void _handleBluetoothStatus(bool enabled) {
     if (!mounted) return;
     setState(() => _bluetoothEnabled = enabled);
-
-    if (enabled) {
-      _hasPromptedBluetoothOff = false;
-      return;
-    }
-
-    if (!_hasPromptedBluetoothOff) {
-      _hasPromptedBluetoothOff = true;
-      _showBluetoothDisabledDialog();
-    }
   }
 
   void _handleScanError(Object error) {
     if (!mounted) return;
     if (error is BluetoothDisabledError) {
-      _showBluetoothDisabledDialog();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ative o Bluetooth para buscar dispositivos.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
       return;
     }
 
@@ -333,29 +327,5 @@ class _ConnectDevicePageState extends State<ConnectDevicePage> with WidgetsBindi
         backgroundColor: Colors.red,
       ),
     );
-  }
-
-  Future<void> _showBluetoothDisabledDialog() async {
-    final openSettings = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Bluetooth desligado'),
-        content: const Text('Para buscar dispositivos, ative o Bluetooth.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Abrir Bluetooth'),
-          ),
-        ],
-      ),
-    );
-
-    if (openSettings == true) {
-      AppSettings.openAppSettings(type: AppSettingsType.bluetooth);
-    }
   }
 }

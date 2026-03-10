@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/ble/ble_question_protocol.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../ble_old/presentation/controllers/messages_controller.dart';
 import '../../../ble_old/presentation/controllers/ble_controller.dart';
@@ -12,12 +13,54 @@ class ModernMessagesPage extends StatefulWidget {
   State<ModernMessagesPage> createState() => _ModernMessagesPageState();
 }
 
+class _QuickQuestionPreset {
+  final String label;
+  final String question;
+  final List<BleQuestionOption> options;
+
+  const _QuickQuestionPreset({
+    required this.label,
+    required this.question,
+    required this.options,
+  });
+}
+
+const List<_QuickQuestionPreset> _questionPresets = [
+  _QuickQuestionPreset(
+    label: 'Confirmar',
+    question: 'Confirmar acao?',
+    options: [
+      BleQuestionOption(id: 'ok', label: 'OK'),
+      BleQuestionOption(id: 'cancel', label: 'Cancelar'),
+    ],
+  ),
+  _QuickQuestionPreset(
+    label: 'Modo',
+    question: 'Escolha o modo',
+    options: [
+      BleQuestionOption(id: 'casa', label: 'Casa'),
+      BleQuestionOption(id: 'rua', label: 'Rua'),
+      BleQuestionOption(id: 'sono', label: 'Sono'),
+    ],
+  ),
+  _QuickQuestionPreset(
+    label: 'Prioridade',
+    question: 'Qual prioridade?',
+    options: [
+      BleQuestionOption(id: 'b1', label: 'Baixa'),
+      BleQuestionOption(id: 'm1', label: 'Media'),
+      BleQuestionOption(id: 'a1', label: 'Alta'),
+    ],
+  ),
+];
+
 class _ModernMessagesPageState extends State<ModernMessagesPage> {
   late final MessagesController _messagesController;
   late final BleController _bleController;
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   ble.ConnectionState _connectionState = ble.ConnectionState.disconnected;
+  int _questionCounter = 0;
 
   @override
   void initState() {
@@ -95,7 +138,7 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
           margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
+            color: Colors.white.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Row(
@@ -151,6 +194,13 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
           final content = msg.content.toLowerCase().trim();
           return !content.startsWith('tick:') && !content.startsWith('tick :');
         }).toList();
+        final questionIndex = <String, BleQuestionPrompt>{};
+        for (final msg in messages) {
+          final prompt = tryParseBleQuestionCommand(msg.content);
+          if (prompt != null) {
+            questionIndex[prompt.questionId] = prompt;
+          }
+        }
 
         if (messages.isEmpty) {
           return const Center(child: Text('Nenhum log disponível', style: TextStyle(color: Colors.white24)));
@@ -164,15 +214,17 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
           itemCount: messages.length,
           itemBuilder: (context, index) {
             final msg = messages[index];
-            return _buildChatBubble(msg);
+            return _buildChatBubble(msg, questionIndex);
           },
         );
       },
     );
   }
 
-  Widget _buildChatBubble(BleMessage message) {
+  Widget _buildChatBubble(BleMessage message, Map<String, BleQuestionPrompt> questionIndex) {
     final bool isRx = message.isReceived;
+    final parsedQuestion = tryParseBleQuestionCommand(message.content);
+    final parsedResult = tryParseBleQuestionResult(message.content);
     return Align(
       alignment: isRx ? Alignment.centerLeft : Alignment.centerRight,
       child: Container(
@@ -180,7 +232,9 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: isRx ? Colors.white.withOpacity(0.08) : Colors.cyanAccent.withOpacity(0.15),
+          color: isRx
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.cyanAccent.withValues(alpha: 0.15),
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(20),
             topRight: const Radius.circular(20),
@@ -188,7 +242,7 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
             bottomRight: Radius.circular(isRx ? 20 : 4),
           ),
           border: Border.all(
-            color: isRx ? Colors.white10 : Colors.cyanAccent.withOpacity(0.3),
+            color: isRx ? Colors.white10 : Colors.cyanAccent.withValues(alpha: 0.3),
           ),
         ),
         child: Column(
@@ -211,34 +265,181 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
               ],
             ),
             const SizedBox(height: 6),
-            Text(
-              message.content,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-            ),
+            if (parsedQuestion != null)
+              _buildQuestionBubble(parsedQuestion)
+            else if (parsedResult != null)
+              _buildQuestionResultBubble(parsedResult, questionIndex)
+            else
+              Text(
+                message.content,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+              ),
           ],
         ),
       ),
     );
   }
 
+  Widget _buildQuestionBubble(BleQuestionPrompt prompt) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Pergunta ${prompt.questionId}',
+          style: const TextStyle(
+            color: Colors.cyanAccent,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          prompt.question,
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: prompt.options.map((option) {
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.white10,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: Colors.white12),
+              ),
+              child: Text(
+                '${option.id}: ${option.label}',
+                style: const TextStyle(color: Colors.white70, fontSize: 11),
+              ),
+            );
+          }).toList(growable: false),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuestionResultBubble(
+    BleQuestionResult result,
+    Map<String, BleQuestionPrompt> questionIndex,
+  ) {
+    final prompt = questionIndex[result.questionId];
+    String? optionLabel;
+    if (prompt != null && result.answerId != null) {
+      for (final option in prompt.options) {
+        if (option.id == result.answerId) {
+          optionLabel = option.label;
+          break;
+        }
+      }
+    }
+
+    if (result.isAnswer) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Resposta do relogio',
+            style: TextStyle(
+              color: Colors.greenAccent,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            prompt == null
+                ? '${result.questionId} -> ${result.answerId}'
+                : '${prompt.question}\n${result.answerId}${optionLabel == null ? '' : ' ($optionLabel)'}',
+            style: const TextStyle(color: Colors.white, fontSize: 14),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Erro de pergunta',
+          style: TextStyle(
+            color: Colors.orangeAccent,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${result.questionId} -> ${_mapQuestionError(result.errorCode ?? 'UNKNOWN')}',
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+        ),
+      ],
+    );
+  }
+
   Widget _buildQuickCommands(bool isConnected) {
-    final commands = ['PING', 'STATUS', 'RESET', 'LED_ON', 'LED_OFF', 'TIME'];
+    final commands = ['PING', 'LED_ON', 'LED_OFF', 'LED_STATUS'];
     return Container(
-      height: 40,
       margin: const EdgeInsets.only(bottom: 8),
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        scrollDirection: Axis.horizontal,
-        itemCount: commands.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          return ActionChip(
-            label: Text(commands[index], style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-            backgroundColor: Colors.white10,
-            labelStyle: TextStyle(color: isConnected ? Colors.white70 : Colors.white30),
-            onPressed: isConnected ? () => _sendMessage(commands[index]) : null,
-          );
-        },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            height: 40,
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              scrollDirection: Axis.horizontal,
+              itemCount: commands.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                return ActionChip(
+                  label: Text(
+                    commands[index],
+                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                  backgroundColor: Colors.white10,
+                  labelStyle: TextStyle(color: isConnected ? Colors.white70 : Colors.white30),
+                  onPressed: isConnected ? () => _sendMessage(commands[index]) : null,
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 40,
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              scrollDirection: Axis.horizontal,
+              itemCount: _questionPresets.length + 1,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                if (index == _questionPresets.length) {
+                  return ActionChip(
+                    avatar: const Icon(Icons.quiz_outlined, size: 16, color: Colors.black),
+                    label: const Text(
+                      'Nova pergunta',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black),
+                    ),
+                    backgroundColor: isConnected ? Colors.cyanAccent : Colors.white12,
+                    onPressed: isConnected ? _showQuestionComposer : null,
+                  );
+                }
+
+                final preset = _questionPresets[index];
+                return ActionChip(
+                  label: Text(
+                    preset.label,
+                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                  backgroundColor: Colors.orange.withValues(alpha: 0.18),
+                  labelStyle: TextStyle(color: isConnected ? Colors.orangeAccent : Colors.white30),
+                  onPressed: isConnected ? () => _sendQuestionPreset(preset) : null,
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -258,12 +459,28 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
                 hintText: 'Enviar comando...',
                 hintStyle: const TextStyle(color: Colors.white30),
                 filled: true,
-                fillColor: Colors.white.withOpacity(0.05),
+                fillColor: Colors.white.withValues(alpha: 0.05),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
                   borderSide: BorderSide.none,
                 ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: isConnected ? _showQuestionComposer : null,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isConnected ? Colors.orangeAccent : Colors.white10,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.quiz_outlined,
+                color: isConnected ? Colors.black : Colors.white38,
+                size: 20,
               ),
             ),
           ),
@@ -314,6 +531,211 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
       if (text == null) _messageController.clear();
       _scrollToBottom();
     }
+  }
+
+  Future<void> _sendQuestionPreset(_QuickQuestionPreset preset) async {
+    final prompt = BleQuestionPrompt(
+      questionId: _nextQuestionId(),
+      question: preset.question,
+      options: preset.options,
+    );
+    await _sendQuestionPrompt(prompt);
+  }
+
+  Future<void> _sendQuestionPrompt(BleQuestionPrompt prompt) async {
+    final payload = buildBleQuestionCommand(prompt);
+    if (payload.length > bleQuestionMaxPayloadLength) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pergunta muito grande para o BLE. Reduza texto e alternativas.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    await _sendMessage(payload);
+  }
+
+  Future<void> _showQuestionComposer() async {
+    if (_connectionState != ble.ConnectionState.connected) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Conecte o dispositivo antes de abrir a pergunta estruturada.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final questionController = TextEditingController();
+    final optionLabelControllers = List.generate(4, (_) => TextEditingController());
+    final optionIdControllers = List.generate(4, (_) => TextEditingController());
+    String? errorText;
+
+    try {
+      final prompt = await showDialog<BleQuestionPrompt>(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              return AlertDialog(
+                backgroundColor: const Color(0xFF161A22),
+                title: const Text('Nova pergunta BLE', style: TextStyle(color: Colors.white)),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: questionController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          labelText: 'Pergunta',
+                          labelStyle: TextStyle(color: Colors.white70),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      for (var i = 0; i < 4; i++) ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: TextField(
+                                controller: optionLabelControllers[i],
+                                style: const TextStyle(color: Colors.white),
+                                decoration: InputDecoration(
+                                  labelText: 'Opcao ${i + 1}',
+                                  labelStyle: const TextStyle(color: Colors.white70),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: TextField(
+                                controller: optionIdControllers[i],
+                                style: const TextStyle(color: Colors.white),
+                                decoration: const InputDecoration(
+                                  labelText: 'ID',
+                                  labelStyle: TextStyle(color: Colors.white70),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                      if (errorText != null)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            errorText!,
+                            style: const TextStyle(color: Colors.orangeAccent, fontSize: 12),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancelar'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      final question = sanitizeBleQuestionText(
+                        questionController.text,
+                        maxLength: 44,
+                      );
+                      final options = <BleQuestionOption>[];
+
+                      for (var i = 0; i < 4; i++) {
+                        final label = sanitizeBleQuestionText(
+                          optionLabelControllers[i].text,
+                          maxLength: 14,
+                        );
+                        if (label.isEmpty) {
+                          continue;
+                        }
+                        final rawId = optionIdControllers[i].text.trim().isEmpty
+                            ? _autoOptionId(label, i)
+                            : optionIdControllers[i].text;
+                        final id = sanitizeBleQuestionText(rawId, maxLength: 16).toLowerCase();
+                        options.add(BleQuestionOption(id: id, label: label));
+                      }
+
+                      if (question.isEmpty) {
+                        setDialogState(() => errorText = 'Informe a pergunta.');
+                        return;
+                      }
+                      if (options.length < bleQuestionMinOptions) {
+                        setDialogState(() => errorText = 'Informe pelo menos duas alternativas.');
+                        return;
+                      }
+
+                      final prompt = BleQuestionPrompt(
+                        questionId: _nextQuestionId(),
+                        question: question,
+                        options: options.take(bleQuestionMaxOptions).toList(growable: false),
+                      );
+                      final payload = buildBleQuestionCommand(prompt);
+                      if (payload.length > bleQuestionMaxPayloadLength) {
+                        setDialogState(() {
+                          errorText = 'Pergunta muito grande para o BLE. Reduza texto/opcoes.';
+                        });
+                        return;
+                      }
+
+                      Navigator.of(context).pop(prompt);
+                    },
+                    child: const Text('Enviar'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+
+      if (prompt != null) {
+        await _sendQuestionPrompt(prompt);
+      }
+    } finally {
+      questionController.dispose();
+      for (final controller in optionLabelControllers) {
+        controller.dispose();
+      }
+      for (final controller in optionIdControllers) {
+        controller.dispose();
+      }
+    }
+  }
+
+  String _nextQuestionId() {
+    _questionCounter = (_questionCounter % 999) + 1;
+    return 'Q${_questionCounter.toString().padLeft(3, '0')}';
+  }
+
+  String _autoOptionId(String label, int index) {
+    final base = label
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+    if (base.isEmpty) {
+      return 'op${index + 1}';
+    }
+    return base.length > 12 ? base.substring(0, 12) : base;
+  }
+
+  String _mapQuestionError(String code) {
+    return switch (code.toUpperCase()) {
+      'TIMEOUT' => 'Tempo esgotado',
+      'INVALID' => 'Resposta invalida',
+      'INVALID_FORMAT' => 'Formato invalido',
+      _ => code,
+    };
   }
 
   String _connectionLabel() {

@@ -26,7 +26,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   bool _permissionsGranted = false;
   ble.ConnectionState _connectionState = ble.ConnectionState.disconnected;
   String? _connectedDeviceId;
-  bool _hasPromptedBluetoothOff = false;
   bool _keepBleAliveInBackground = true;
   bool _enableMockMode = false;
 
@@ -467,40 +466,6 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
   void _handleBluetoothStatus(bool enabled) {
     if (!mounted) return;
     setState(() => _bluetoothEnabled = enabled);
-
-    if (enabled) {
-      _hasPromptedBluetoothOff = false;
-      return;
-    }
-
-    if (!_hasPromptedBluetoothOff) {
-      _hasPromptedBluetoothOff = true;
-      _showBluetoothDisabledDialog();
-    }
-  }
-
-  Future<void> _showBluetoothDisabledDialog() async {
-    final openSettings = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Bluetooth desligado'),
-        content: const Text('Para usar o app, ative o Bluetooth.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Abrir Bluetooth'),
-          ),
-        ],
-      ),
-    );
-
-    if (openSettings == true) {
-      AppSettings.openAppSettings(type: AppSettingsType.bluetooth);
-    }
   }
 
   Widget _buildActionButton(
