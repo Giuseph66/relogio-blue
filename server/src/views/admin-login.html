@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin | Relogio Blutu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/admin/admin.css" />
+</head>
+
+<body class="admin-login-body">
+  <main class="login-shell">
+    <section class="login-brand">
+      <span class="eyebrow">Painel Privado</span>
+      <h1>Configuração inteligente de locais e perguntas do relógio.</h1>
+      <p>
+        Gerencie geofences, perguntas vinculadas aos pontos monitorados e acompanhe
+        as respostas recebidas dos aplicativos em um único painel.
+      </p>
+      <div class="login-badges">
+        <span>Mapa interativo</span>
+        <span>Locais públicos por cidade</span>
+        <span>Dashboard de respostas</span>
+      </div>
+    </section>
+
+    <section class="login-card">
+      <div class="card-head">
+        <span class="eyebrow">Acesso administrativo</span>
+        <h2>Entrar</h2>
+        <p>Use o e-mail e a senha cadastrados no `.env` do servidor.</p>
+      </div>
+      <form id="login-form" class="login-form">
+        <label>
+          <span>E-mail</span>
+          <input id="email" type="email" placeholder="admin@gmail.com" required />
+        </label>
+        <label>
+          <span>Senha</span>
+          <input id="password" type="password" placeholder="••••••••" required />
+        </label>
+        <button type="submit" class="primary-btn">Entrar no painel</button>
+        <p id="login-feedback" class="inline-feedback"></p>
+      </form>
+    </section>
+  </main>
+  <script src="/admin/login.js" defer></script>
+</body>
+
+</html>

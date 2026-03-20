@@ -1,5 +1,6 @@
 import '../../domain/entities/ble_settings.dart';
 import '../../../../core/ble/ble_constants.dart';
+import '../../../../core/config/app_config.dart';
 
 /// Model for BLE Settings (extends entity)
 class BleSettingsModel extends BleSettings {
@@ -35,7 +36,7 @@ class BleSettingsModel extends BleSettings {
       backgroundNotifyOnRx: true,
       backgroundNotifyFilterEnabled: false,
       backgroundNotifyAllowedPatterns: const [],
-      serverApiUrl: '',
+      serverApiUrl: AppConfig.serverApiUrl,
     );
   }
 
@@ -64,7 +65,9 @@ class BleSettingsModel extends BleSettings {
               const [],
       backgroundServiceTitle: json['backgroundServiceTitle'] as String?,
       backgroundServiceText: json['backgroundServiceText'] as String?,
-      serverApiUrl: json['serverApiUrl'] as String? ?? '',
+      serverApiUrl: (json['serverApiUrl'] as String?)?.isNotEmpty == true
+          ? json['serverApiUrl'] as String
+          : AppConfig.serverApiUrl,
     );
   }
 

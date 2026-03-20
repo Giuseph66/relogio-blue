@@ -6,6 +6,7 @@ import '../../../../core/di/dependency_injection.dart';
 import '../../../maps_old/presentation/controllers/map_controller.dart';
 import '../../../maps_old/presentation/widgets/permission_state_view.dart';
 import '../../../maps_old/domain/entities/map_location.dart';
+import '../../../../core/geofence/geofence_service.dart';
 import '../../../location_tracker/presentation/controllers/location_tracker_controller.dart';
 import '../../../location_tracker/presentation/widgets/add_location_dialog.dart';
 
@@ -37,6 +38,9 @@ class _ModernMapPageState extends State<ModernMapPage> {
   LatLng? _selectedPin;
   String? _selectedPinAddress;
   bool _isResolving = false;
+  bool _isSyncingLocations = false;
+  bool _autoSyncDone = false;
+  String? _lastCity;
 
   @override
   void initState() {
@@ -68,17 +72,16 @@ class _ModernMapPageState extends State<ModernMapPage> {
         });
         _moveCameraToLocation(location);
 
-        // Check proximity with tracked locations silently
-        final visited = await _trackerController.checkProximityAndRegisterVisit(location);
-        if (visited != null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Visita detectada: ${visited.name}! Registrada no histórico.'),
-              backgroundColor: Colors.cyan[700],
-              duration: const Duration(seconds: 4),
-            ),
-          );
+        // Auto-sync locations from server on first GPS fix (silent)
+        if (!_autoSyncDone) {
+          _autoSyncDone = true;
+          _syncLocationsFromServer(silent: true);
         }
+
+        // Delegate geofence check + question flow to the GeofenceService.
+        // It deduplicates with its own timer, so calling updateLocation on every
+        // UI GPS event just keeps the shared position fresh.
+        GeofenceService().updateLocation(location, city: _lastCity);
       }
     }));
 
@@ -245,6 +248,19 @@ class _ModernMapPageState extends State<ModernMapPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (!_isSelectionMode) ...[
+                  // Sync locations from server button
+                  FloatingActionButton(
+                    heroTag: 'sync_locations',
+                    onPressed: _isSyncingLocations ? null : _syncLocationsFromServer,
+                    backgroundColor: const Color(0xFF1E1E1E),
+                    foregroundColor: Colors.greenAccent,
+                    mini: true,
+                    tooltip: 'Atualizar locais do servidor',
+                    child: _isSyncingLocations
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.greenAccent))
+                        : const Icon(Icons.cloud_download_outlined),
+                  ),
+                  const SizedBox(height: 10),
                   // Pin-on-map button
                   FloatingActionButton(
                     heroTag: 'select_on_map',
@@ -434,6 +450,87 @@ class _ModernMapPageState extends State<ModernMapPage> {
     }
 
     return markers;
+  }
+
+  Future<void> _syncLocationsFromServer({bool silent = false}) async {
+    if (_isSyncingLocations) return;
+
+    if (_currentLocation == null) {
+      if (!silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Aguarde a localização GPS ser obtida.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isSyncingLocations = true);
+
+    try {
+      final settingsResult = await DependencyInjection().loadSettings();
+      final serverUrl = settingsResult.valueOrNull?.serverApiUrl ?? '';
+
+      if (serverUrl.isEmpty) {
+        if (!silent && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Configure a URL do servidor em Ajustes.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Reverse geocode to get city name
+      String? city;
+      try {
+        final placemarks = await geocoding.placemarkFromCoordinates(
+          _currentLocation!.latitude,
+          _currentLocation!.longitude,
+        );
+        if (placemarks.isNotEmpty) {
+          final p = placemarks.first;
+          city = (p.locality?.isNotEmpty == true)
+              ? p.locality
+              : (p.subAdministrativeArea?.isNotEmpty == true)
+                  ? p.subAdministrativeArea
+                  : p.administrativeArea;
+          if (city != null) _lastCity = city;
+        }
+      } catch (_) {}
+
+      final added = await _trackerController.syncFromServer(
+        serverUrl,
+        latitude: _currentLocation!.latitude,
+        longitude: _currentLocation!.longitude,
+        city: city,
+      );
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(added > 0
+                ? '$added novo(s) local(is) importado(s) do servidor.'
+                : 'Locais já atualizados.'),
+            backgroundColor: Colors.cyan[700],
+          ),
+        );
+      }
+    } catch (e) {
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao buscar locais: $e'),
+            backgroundColor: Colors.red[700],
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSyncingLocations = false);
+    }
   }
 
   void _showAddLocationDialog({LatLng? pin, String? pinAddr}) async {

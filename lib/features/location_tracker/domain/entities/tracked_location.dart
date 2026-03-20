@@ -28,12 +28,14 @@ class TrackedLocation {
 
   factory TrackedLocation.fromJson(Map<String, dynamic> json) {
     return TrackedLocation(
-      id: json['id'],
-      name: json['name'],
-      latitude: json['latitude'],
-      longitude: json['longitude'],
-      radiusMeters: json['radiusMeters'],
-      createdAt: DateTime.parse(json['createdAt']),
+      id: json['id'] as String,
+      name: json['name'] as String,
+      latitude: (json['latitude'] as num).toDouble(),
+      longitude: (json['longitude'] as num).toDouble(),
+      radiusMeters: (json['radiusMeters'] as num).toDouble(),
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
     );
   }
 }

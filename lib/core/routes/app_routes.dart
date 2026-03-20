@@ -8,18 +8,21 @@ import '../../features/ble_old/presentation/pages/messages_page.dart';
 import '../../features/ble_old/presentation/pages/settings_page.dart';
 import '../../features/ble_old/presentation/pages/about_page.dart';
 import '../../features/maps_old/presentation/pages/map_page.dart';
-
-// Novos caminhos da Interface Moderna
 import '../../features/main/presentation/pages/main_screen.dart';
 import '../../features/ble/presentation/pages/connect_device_page.dart';
 import '../../features/ble/presentation/pages/messages_page.dart';
 import '../../features/maps/presentation/pages/map_page.dart';
 import '../../features/location_tracker/presentation/pages/location_catalog_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
+import '../../features/history/presentation/pages/history_page.dart';
+import '../../features/history/presentation/controllers/history_controller.dart';
+import '../../features/auth/presentation/pages/login_page.dart';
+import '../di/dependency_injection.dart';
 import '../ui_mode/ui_mode_manager.dart';
 
 class AppRoutes {
   static const String home = '/';
+  static const String login = '/login';
   static const String dashboard = '/dashboard';
   static const String catalog = '/catalog';
   static const String connect = '/connect';
@@ -27,6 +30,7 @@ class AppRoutes {
   static const String settings = '/settings';
   static const String about = '/about';
   static const String map = '/map';
+  static const String history = '/history';
   static const String tela1 = '/tela1';
   static const String tela2 = '/tela2';
   static const String tela3 = '/tela3';
@@ -35,7 +39,15 @@ class AppRoutes {
     final isModernUi = UiModeManager().isModernUi;
     final routeName = routeSettings.name ?? home;
     
-    if (routeName == home || routeName == dashboard) {
+    // Início (agora é Login)
+    if (routeName == home || routeName == login) {
+      return MaterialPageRoute(
+        builder: (_) => const LoginPage(),
+        settings: routeSettings,
+      );
+    }
+
+    if (routeName == dashboard) {
       if (isModernUi) {
         return MaterialPageRoute(
           builder: (_) => const MainScreen(),
@@ -110,6 +122,17 @@ class AppRoutes {
     if (routeName == catalog) {
       return MaterialPageRoute(
         builder: (_) => const LocationCatalogPage(),
+        settings: routeSettings,
+      );
+    }
+
+    if (routeName == history) {
+      return MaterialPageRoute(
+        builder: (_) => HistoryPage(
+          controller: HistoryController(
+            orchestrator: DependencyInjection().visitQuestionOrchestrator,
+          ),
+        ),
         settings: routeSettings,
       );
     }

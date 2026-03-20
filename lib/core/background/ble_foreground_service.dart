@@ -5,8 +5,12 @@ import 'dart:ui';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 
 import '../ble/ble_constants.dart';
+import '../ble/ble_question_protocol.dart';
+import '../config/app_config.dart';
 import '../logger/app_logger.dart';
 import '../network/ble_message_relay.dart';
 import '../notifications/message_notification_filter.dart';
@@ -347,6 +351,14 @@ class BleForegroundTaskHandler extends TaskHandler {
   DateTime? _nextConnectAt;
   DateTime? _lastHeartbeatAt;
 
+  // ── Background geofence polling ──────────────────────────────────────────
+  int _locationTickCounter = 0;
+  DateTime? _lastGeofenceCheckAt;
+  String? _lastSentQuestionId;
+  DateTime? _lastSentQuestionAt;
+  static const int _locationTickInterval = 10; // ticks before GPS check (~10s)
+  static const Duration _questionCooldown = Duration(minutes: 3);
+
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     await _loadConfigFromStorage();
@@ -362,6 +374,17 @@ class BleForegroundTaskHandler extends TaskHandler {
   void onRepeatEvent(DateTime timestamp) {
     AppLogger.debug('FG tick | appAlive=${_isAppAlive()} connected=$_isConnected');
     _maybeMaintainConnection();
+
+    // When main isolate is paused, poll GPS here so geofence detection continues.
+    if (!_isAppAlive()) {
+      _locationTickCounter++;
+      if (_locationTickCounter >= _locationTickInterval) {
+        _locationTickCounter = 0;
+        unawaited(_checkGeofenceBackground());
+      }
+    } else {
+      _locationTickCounter = 0;
+    }
   }
 
   @override
@@ -612,6 +635,133 @@ class BleForegroundTaskHandler extends TaskHandler {
       // Keep defaults when parsing fails.
     }
     return const [];
+  }
+
+  // ── Background geofence ──────────────────────────────────────────────────
+
+  Future<void> _checkGeofenceBackground() async {
+    final serverUrl = _serverApiUrl?.trim() ?? '';
+    if (serverUrl.isEmpty) return;
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 5),
+        ),
+      );
+
+      _lastGeofenceCheckAt = DateTime.now();
+      AppLogger.debug(
+        'FG geofence: pos=${position.latitude.toStringAsFixed(5)},${position.longitude.toStringAsFixed(5)}',
+      );
+
+      final uri = Uri.parse('$serverUrl/api/location/resolve');
+      final resp = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'deviceId': 'mobile-app',
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+        }),
+      ).timeout(const Duration(seconds: 5));
+
+      if (resp.statusCode != 200) return;
+
+      final body = jsonDecode(resp.body) as Map<String, dynamic>;
+      final questions = (body['questions'] as List?)
+              ?.whereType<Map<String, dynamic>>()
+              .toList() ??
+          [];
+
+      if (questions.isEmpty) return;
+
+      // Use first question; prefer the one matching a specific locationId if available.
+      final q = questions.first;
+      final questionId = q['id'] as String? ?? '';
+      if (questionId.isEmpty) return;
+
+      // Deduplication – don't ask the same question again within cooldown.
+      if (_lastSentQuestionId == questionId &&
+          _lastSentQuestionAt != null &&
+          DateTime.now().difference(_lastSentQuestionAt!) < _questionCooldown) {
+        return;
+      }
+
+      final rawOptions = (q['options'] as List?)
+              ?.whereType<Map<String, dynamic>>()
+              .toList() ??
+          [];
+      if (rawOptions.length < bleQuestionMinOptions) return;
+
+      final prompt = BleQuestionPrompt(
+        questionId: questionId,
+        question: q['prompt'] as String? ?? '',
+        options: rawOptions
+            .map((o) => BleQuestionOption(
+                  id: o['id'] as String? ?? '',
+                  label: o['label'] as String? ?? '',
+                ))
+            .toList(),
+      );
+
+      final command = buildBleQuestionCommand(prompt);
+      final safeId = _extractCommandId(command);
+
+      if (!_isConnected) {
+        AppLogger.info('FG geofence: watch not connected, skipping send');
+        return;
+      }
+
+      await _sendBleCommand(command);
+
+      _lastSentQuestionId = questionId;
+      _lastSentQuestionAt = DateTime.now();
+
+      AppLogger.info('FG geofence: question sent – ${q['locationName'] ?? questionId}');
+      _updateStatusNotification('Pergunta enviada ao relógio');
+
+      // Notify main isolate so it saves the record to DB when it wakes up.
+      FlutterForegroundTask.sendDataToMain({
+        'type': 'fg_question_sent',
+        'locationId': q['locationId'] as String? ?? questionId,
+        'locationName': q['locationName'] as String? ?? '',
+        'questionId': safeId,
+        'command': command,
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+      });
+    } catch (e) {
+      AppLogger.debug('FG geofence check error: $e');
+    }
+  }
+
+  Future<void> _sendBleCommand(String command) async {
+    final deviceId = _deviceId;
+    final serviceUuid = _serviceUuid;
+    final notifyUuid = _notifyUuid;
+    if (deviceId == null || serviceUuid == null || notifyUuid == null) return;
+
+    // The write characteristic is the same as notify for HM-10 style modules.
+    final characteristic = QualifiedCharacteristic(
+      serviceId: Uuid.parse(serviceUuid),
+      characteristicId: Uuid.parse(notifyUuid),
+      deviceId: deviceId,
+    );
+
+    final bytes = command.codeUnits;
+    try {
+      await _ble.writeCharacteristicWithoutResponse(characteristic, value: bytes);
+      AppLogger.debug('FG BLE sent: ${bytes.length} bytes');
+    } catch (e) {
+      AppLogger.warning('FG BLE send error: $e');
+    }
+  }
+
+  String _extractCommandId(String command) {
+    final parts = command.split('|');
+    return parts.length > 1 ? parts[1] : command;
   }
 
   Future<void> _disconnect() async {

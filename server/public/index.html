@@ -1,176 +1,616 @@
 <!doctype html>
-<html lang="pt-br">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>BLE Live Messages</title>
-    <style>
-      :root {
-        color-scheme: light;
+<html lang="pt-BR">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Relogio Blutu | Dashboard Público</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #eef3f2;
+      --surface: rgba(255, 255, 255, 0.82);
+      --line: rgba(17, 32, 36, 0.12);
+      --text: #162327;
+      --muted: #5f7075;
+      --accent: #0f8c8c;
+      --accent-2: #1e6b97;
+      --danger: #c95b4d;
+      --warning: #c08a22;
+      --success: #25896a;
+      --shadow: 0 18px 48px rgba(17, 32, 36, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Sora", "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(15, 140, 140, 0.2), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(201, 91, 77, 0.14), transparent 22%),
+        var(--bg);
+    }
+
+    .hero {
+      padding: 32px 24px 12px;
+    }
+
+    .hero-card {
+      max-width: 100%;
+      margin: 0 auto;
+      padding: 28px;
+      border-radius: 28px;
+      background:
+        linear-gradient(135deg, rgba(21, 32, 33, 0.96), rgba(15, 140, 140, 0.86)),
+        #152021;
+      color: #f5fbfb;
+      box-shadow: var(--shadow);
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: end;
+    }
+
+    .hero h1 {
+      margin: 12px 0 10px;
+      font-size: clamp(2rem, 4vw, 3.6rem);
+      line-height: 1.02;
+      max-width: 11ch;
+    }
+
+    .hero p {
+      max-width: 60ch;
+      color: rgba(245, 251, 251, 0.8);
+      line-height: 1.7;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.1);
+      font-size: 0.74rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .hero-actions {
+      display: grid;
+      gap: 12px;
+      justify-items: end;
+    }
+
+    .hero-actions a {
+      text-decoration: none;
+      color: #f5fbfb;
+      background: rgba(255, 255, 255, 0.12);
+      padding: 12px 16px;
+      border-radius: 16px;
+    }
+
+    main {
+      max-width: 100%;
+      margin: 0 auto;
+      padding: 12px 24px 40px;
+      display: grid;
+      gap: 22px;
+    }
+
+    .stats-grid,
+    .grid-two {
+      display: grid;
+      gap: 18px;
+    }
+
+    .stats-grid {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .grid-two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid rgba(255, 255, 255, 0.48);
+      border-radius: 26px;
+      box-shadow: var(--shadow);
+      padding: 22px;
+      backdrop-filter: blur(16px);
+    }
+
+    .stat-card span,
+    .card-head p,
+    .status-text,
+    .muted,
+    .table-wrap td small {
+      color: var(--muted);
+    }
+
+    .stat-card strong {
+      display: block;
+      margin-top: 10px;
+      font-size: 1.8rem;
+    }
+
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: start;
+      margin-bottom: 18px;
+    }
+
+    .card-head h2,
+    .card-head h3 {
+      margin: 10px 0 6px;
+    }
+
+    .status-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 999px;
+      background: rgba(17, 32, 36, 0.06);
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--danger);
+    }
+
+    .dot.online {
+      background: var(--success);
+    }
+
+    .city-bars,
+    .device-list,
+    .message-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .city-bar,
+    .device-item,
+    .message-item {
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 18px;
+      padding: 14px 16px;
+    }
+
+    .city-bar strong,
+    .device-item strong,
+    .message-item strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .bar {
+      height: 12px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(17, 32, 36, 0.08);
+    }
+
+    .bar>span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    }
+
+    .table-wrap {
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 880px;
+    }
+
+    th,
+    td {
+      padding: 14px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+    }
+
+    th {
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+
+    .pill {
+      display: inline-flex;
+      padding: 8px 10px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .pill.success {
+      background: rgba(37, 137, 106, 0.12);
+      color: var(--success);
+    }
+
+    .pill.warning {
+      background: rgba(192, 138, 34, 0.14);
+      color: var(--warning);
+    }
+
+    .pill.danger {
+      background: rgba(201, 91, 77, 0.12);
+      color: var(--danger);
+    }
+
+    .pill.neutral {
+      background: rgba(17, 32, 36, 0.08);
+      color: var(--text);
+    }
+
+    .message-item header {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .message-item p {
+      margin: 8px 0 0;
+      line-height: 1.6;
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 8px 0;
+    }
+
+    .chart-wrapper {
+      position: relative;
+      height: 260px;
+      width: 100%;
+    }
+
+    @media (max-width: 1180px) {
+      .stats-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
       }
-      body {
-        margin: 0;
-        font-family: "Trebuchet MS", "Segoe UI", sans-serif;
-        background: radial-gradient(circle at top, #fef6e4, #f2e5d7);
-        color: #1f1b16;
+
+      .grid-two {
+        grid-template-columns: 1fr;
       }
-      header {
-        padding: 24px;
-        background: #1f1b16;
-        color: #fef6e4;
-        text-align: center;
-        letter-spacing: 1px;
+
+      .hero-card {
+        flex-direction: column;
+        align-items: start;
       }
-      main {
-        max-width: 960px;
-        margin: 0 auto;
-        padding: 24px;
+
+      .hero-actions {
+        justify-items: start;
       }
-      .status {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-weight: bold;
-        margin-bottom: 16px;
-      }
-      .dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: #d64545;
-      }
-      .dot.online {
-        background: #2ecc71;
-      }
-      .messages {
-        display: grid;
+    }
+
+    @media (max-width: 720px) {
+      .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 12px;
       }
-      .message {
-        padding: 12px 16px;
-        border-radius: 12px;
-        background: #ffffff;
-        box-shadow: 0 10px 20px rgba(31, 27, 22, 0.08);
+
+      .stat-card {
+        padding: 14px;
       }
-      .message header {
-        all: unset;
-        display: flex;
-        justify-content: space-between;
-        font-size: 12px;
-        color: #665c54;
+
+      .stat-card strong {
+        font-size: 1.4rem;
       }
-      .message p {
-        margin: 8px 0 0;
-        font-size: 16px;
-        white-space: pre-wrap;
+
+      .hero,
+      main {
+        padding-left: 16px;
+        padding-right: 16px;
       }
-      .empty {
-        padding: 24px;
-        border: 2px dashed #d3c6b8;
-        border-radius: 12px;
+
+      .hero-card,
+      .card {
+        padding: 18px;
+        border-radius: 22px;
+      }
+
+      .hero h1 {
+        font-size: 2.1rem;
+      }
+
+      .hero-actions {
+        width: 100%;
+      }
+
+      .hero-actions .status-row {
+        justify-content: center;
+        width: 100%;
+        margin-bottom: 8px;
+      }
+
+      .hero-actions a {
         text-align: center;
-        color: #7a6f66;
+        width: 100%;
       }
-    </style>
-  </head>
-  <body>
-    <header>
-      <h1>Relogio BLE - Mensagens</h1>
-      <p>Fluxo em tempo real do relogio para a tela</p>
-    </header>
-    <main>
-      <div class="status">
-        <span class="dot" id="status-dot"></span>
-        <span id="status-text">Conectando...</span>
+    }
+  </style>
+</head>
+
+<body>
+  <section class="hero">
+    <div class="hero-card">
+      <div>
+        <span class="eyebrow">Status Global</span>
+        <h1>Painel Operacional em Tempo Real</h1>
+        <p>
+          Monitore a telemetria ao vivo da frota de dispositivos. Analise a conectividade,
+          o fluxo de mensagens BLE e a distribuição contínua de processamento.
+        </p>
       </div>
-      <div class="messages" id="messages"></div>
-      <div class="empty" id="empty">Nenhuma mensagem recebida ainda.</div>
-    </main>
-    <script>
-      const messagesEl = document.getElementById("messages");
-      const emptyEl = document.getElementById("empty");
-      const statusDot = document.getElementById("status-dot");
-      const statusText = document.getElementById("status-text");
+      <div class="hero-actions">
+        <div class="status-row">
+          <span class="dot" id="status-dot"></span>
+          <span class="status-text" id="status-text">Conectando ao stream...</span>
+        </div>
+        <a href="/admin/login">Área Administrativa</a>
+      </div>
+    </div>
+  </section>
 
-      function formatTime(iso) {
-        const date = new Date(iso);
-        return date.toLocaleTimeString("pt-BR");
+  <main>
+    <section class="stats-grid" id="stats-grid"></section>
+
+    <section class="grid-two">
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <span class="eyebrow">Respostas</span>
+            <h2>Volume recente</h2>
+            <p>Histórico diário das respostas registradas pelo servidor.</p>
+          </div>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="volume-chart"></canvas>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <span class="eyebrow">Processamento</span>
+            <h2>Status das respostas</h2>
+            <p>Distribuição entre itens processados, pendentes e falhos.</p>
+          </div>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="status-chart"></canvas>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid-two">
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <span class="eyebrow">Origem</span>
+            <h3>Cidades com maior volume</h3>
+          </div>
+        </div>
+        <div id="top-cities" class="city-bars"></div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <span class="eyebrow">Coleta</span>
+            <h3>Respostas recentes</h3>
+            <p>Últimos eventos enviados pelos aplicativos conectados.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Recebido em</th>
+                <th>Pergunta</th>
+                <th>Resposta</th>
+                <th>Cidade</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="responses-table"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const statsGrid = document.getElementById('stats-grid');
+    const topCities = document.getElementById('top-cities');
+    const responsesTable = document.getElementById('responses-table');
+
+    let volumeChart;
+    let statusChart;
+
+    function setStatus(online) {
+      statusDot.classList.toggle('online', online);
+      statusText.textContent = online ? 'Stream online' : 'Stream offline';
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function formatDate(value) {
+      if (!value) return '-';
+      return new Date(value).toLocaleString('pt-BR');
+    }
+
+    function statusClass(status) {
+      if (status === 'processed' || status === 'done') return 'success';
+      if (status === 'pending' || status === 'processing') return 'warning';
+      if (status === 'failed') return 'danger';
+      return 'neutral';
+    }
+
+    function renderStats(summary) {
+      const items = [
+        ['Dispositivos', summary.devicesCount],
+        ['Locais', summary.locationsCount],
+        ['Perguntas', summary.questionsCount],
+        ['Respostas', summary.totalResponses],
+        ['Pendentes', summary.pendingResponses],
+        ['Hoje', summary.responsesToday],
+      ];
+
+      statsGrid.innerHTML = items
+        .map(([label, value]) => `
+            <article class="card stat-card">
+              <span>${label}</span>
+              <strong>${value}</strong>
+            </article>
+          `)
+        .join('');
+    }
+
+    function renderCities(items) {
+      if (!items.length) {
+        topCities.innerHTML = '<p class="muted">Sem dados de cidades ainda.</p>';
+        return;
       }
 
-      function renderMessage(message, prepend = true) {
-        const card = document.createElement("article");
-        card.className = "message";
-        card.innerHTML = `
-          <header>
-            <span>${message.deviceName || message.deviceId || "Relogio BLE"}</span>
-            <span>${formatTime(message.timestamp || message.receivedAt)}</span>
-          </header>
-          <p>${message.content}</p>
-        `;
-        if (prepend) {
-          messagesEl.prepend(card);
-        } else {
-          messagesEl.append(card);
-        }
+      const max = Math.max(...items.map((item) => item.total));
+      topCities.innerHTML = items
+        .map((item) => `
+            <article class="city-bar">
+              <strong>${escapeHtml(item.city)}</strong>
+              <div class="bar"><span style="width:${(item.total / max) * 100}%"></span></div>
+              <small class="muted">${item.total} respostas</small>
+            </article>
+          `)
+        .join('');
+    }
+
+    function renderResponses(items) {
+      if (!items.length) {
+        responsesTable.innerHTML = '<tr><td colspan="5" class="muted">Nenhuma resposta registrada.</td></tr>';
+        return;
       }
 
-      function renderInitial(messages) {
-        messagesEl.innerHTML = "";
-        // Filtrar mensagens que contêm "tick" antes de renderizar
-        const filteredMessages = messages.filter(msg => {
-          const content = String(msg.content || '').toLowerCase();
-          return !content.includes('tick');
-        });
-        if (!filteredMessages.length) {
-          emptyEl.style.display = "block";
-          return;
-        }
-        emptyEl.style.display = "none";
-        filteredMessages.slice().reverse().forEach((msg) => renderMessage(msg, false));
+      responsesTable.innerHTML = items
+        .map((item) => `
+            <tr>
+              <td>${formatDate(item.receivedAt)}</td>
+              <td>${escapeHtml(item.questionPrompt || item.questionId || '-')}</td>
+              <td>${escapeHtml(item.answerText || item.answerId || '-')}</td>
+              <td>${escapeHtml(item.city || '-')}</td>
+              <td><span class="pill ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td>
+            </tr>
+          `)
+        .join('');
+    }
+
+    function renderCharts(data) {
+      const volumeCtx = document.getElementById('volume-chart');
+      const statusCtx = document.getElementById('status-chart');
+
+      if (volumeChart) volumeChart.destroy();
+      if (statusChart) statusChart.destroy();
+
+      volumeChart = new Chart(volumeCtx, {
+        type: 'line',
+        data: {
+          labels: data.volumeByDay.map((item) => item.day),
+          datasets: [
+            {
+              label: 'Respostas',
+              data: data.volumeByDay.map((item) => item.total),
+              borderColor: '#0f8c8c',
+              backgroundColor: 'rgba(15, 140, 140, 0.12)',
+              fill: true,
+              tension: 0.35,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+          },
+        },
+      });
+
+      const statusEntries = Object.entries(data.responseStatusCounts || {});
+      statusChart = new Chart(statusCtx, {
+        type: 'doughnut',
+        data: {
+          labels: statusEntries.map(([label]) => label),
+          datasets: [
+            {
+              data: statusEntries.map(([, value]) => value),
+              backgroundColor: ['#0f8c8c', '#c08a22', '#c95b4d', '#1e6b97'],
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+        },
+      });
+    }
+
+    async function loadDashboard() {
+      const response = await fetch('/api/public/dashboard');
+      const data = await response.json();
+      renderStats(data.summary);
+      renderCities(data.topCities || []);
+      renderResponses(data.recentResponses || []);
+      renderCharts(data);
+    }
+
+    async function bootstrap() {
+      try {
+        await loadDashboard();
+      } catch (error) {
+        statusText.textContent = 'Falha ao carregar dashboard';
       }
 
-      async function loadMessages() {
-        try {
-          const response = await fetch("/api/messages");
-          const data = await response.json();
-          renderInitial(data.messages || []);
-        } catch (error) {
-          statusText.textContent = "Falha ao carregar mensagens";
-        }
-      }
-
-      function setStatus(online) {
-        statusDot.classList.toggle("online", online);
-        statusText.textContent = online ? "Online" : "Offline";
-      }
-
-      loadMessages();
-
-      const source = new EventSource("/events");
-      source.addEventListener("init", (event) => {
-        const data = JSON.parse(event.data || "[]");
-        // Filtrar mensagens que contêm "tick" antes de renderizar
-        const filteredData = Array.isArray(data) 
-          ? data.filter(msg => {
-              const content = String(msg.content || '').toLowerCase();
-              return !content.includes('tick');
-            })
-          : [];
-        renderInitial(filteredData);
+      const source = new EventSource('/events');
+      source.addEventListener('init', (event) => {
         setStatus(true);
       });
-      source.addEventListener("message", (event) => {
-        const message = JSON.parse(event.data || "{}");
-        // Filtrar mensagens que contêm "tick" (case insensitive)
-        const content = String(message.content || '').toLowerCase();
-        if (message.content && !content.includes('tick')) {
-          emptyEl.style.display = "none";
-          renderMessage(message);
-        }
-      });
-      source.addEventListener("error", () => {
-        setStatus(false);
-      });
-    </script>
-  </body>
+      source.addEventListener('error', () => setStatus(false));
+
+      setInterval(loadDashboard, 15000);
+    }
+
+    bootstrap();
+  </script>
+</body>
+
 </html>

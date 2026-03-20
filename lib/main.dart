@@ -6,19 +6,27 @@ import 'core/background/ble_foreground_service.dart';
 import 'core/notifications/notification_service.dart';
 
 import 'core/ui_mode/ui_mode_manager.dart';
+import 'core/auth/auth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize background services
   await NotificationService().init();
   await BleForegroundServiceManager().init();
-  
+
   // Initialize UI Mode State
   await UiModeManager().init();
+
+  // Restore authentication session
+  await AuthService().init();
   
   // Initialize dependency injection
-  await DependencyInjection().initialize(mockMode: false);
+  final di = DependencyInjection();
+  await di.initialize(mockMode: false);
+
+  // Start connectivity-aware sync service
+  di.syncService.start();
   
   runApp(const MyApp());
 }

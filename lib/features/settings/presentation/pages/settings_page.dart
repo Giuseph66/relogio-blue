@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/di/dependency_injection.dart';
+import '../../../../core/config/app_config.dart';
+import '../../../auth/presentation/widgets/auth_guard.dart';
 import '../../../../core/background/ble_foreground_service.dart';
 import '../../../../core/ui_mode/ui_mode_manager.dart';
 import '../../../../core/routes/app_routes.dart';
@@ -22,7 +24,6 @@ class _ModernSettingsPageState extends State<ModernSettingsPage> {
   final _deviceIdController = TextEditingController();
   final _backgroundServiceTitleController = TextEditingController();
   final _backgroundServiceTextController = TextEditingController();
-  final _serverApiUrlController = TextEditingController();
   
   bool _autoReconnect = false;
   bool _enableMockMode = false;
@@ -62,7 +63,6 @@ class _ModernSettingsPageState extends State<ModernSettingsPage> {
             List<String>.from(settings.backgroundNotifyAllowedPatterns);
         _backgroundServiceTitleController.text = settings.backgroundServiceTitle ?? '';
         _backgroundServiceTextController.text = settings.backgroundServiceText ?? '';
-        _serverApiUrlController.text = settings.serverApiUrl;
         _connectionMode = settings.connectionMode;
       });
     }
@@ -77,7 +77,6 @@ class _ModernSettingsPageState extends State<ModernSettingsPage> {
     _deviceIdController.dispose();
     _backgroundServiceTitleController.dispose();
     _backgroundServiceTextController.dispose();
-    _serverApiUrlController.dispose();
     super.dispose();
   }
 
@@ -186,24 +185,53 @@ class _ModernSettingsPageState extends State<ModernSettingsPage> {
                 ),
               ),
               const SizedBox(height: 32),
-              _buildSectionHeader('API do Servidor'),
-              const SizedBox(height: 12),
-              _buildGlassCard(
-                child: _buildModernTextField('URL da API', _serverApiUrlController, Icons.lan, required: false, hint: 'http://...'),
-              ),
-              const SizedBox(height: 32),
-              _buildSectionHeader('Extras'),
-              const SizedBox(height: 12),
-              _buildGlassCard(
-                child: ListTile(
-                  leading: const Icon(Icons.map_outlined, color: Colors.cyanAccent),
-                  title: const Text('Catálogo de Locais', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  subtitle: const Text('Gerenciar locais salvos e histórico', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                  trailing: const Icon(Icons.chevron_right, color: Colors.white38),
-                  onTap: () => Navigator.of(context).pushNamed(AppRoutes.catalog),
+              AuthGuard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSectionHeader('API do Servidor'),
+                    const SizedBox(height: 12),
+                    _buildGlassCard(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.lan, color: Colors.white38, size: 20),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('URL da API', style: TextStyle(color: Colors.white38, fontSize: 12)),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    AppConfig.serverApiUrl,
+                                    style: const TextStyle(color: Colors.white70, fontSize: 14),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    _buildSectionHeader('Extras'),
+                    const SizedBox(height: 12),
+                    _buildGlassCard(
+                      child: ListTile(
+                        leading: const Icon(Icons.map_outlined, color: Colors.cyanAccent),
+                        title: const Text('Catálogo de Locais', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        subtitle: const Text('Gerenciar locais salvos e histórico', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                        trailing: const Icon(Icons.chevron_right, color: Colors.white38),
+                        onTap: () => Navigator.of(context).pushNamed(AppRoutes.catalog),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                  ],
                 ),
               ),
-              const SizedBox(height: 48),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -303,7 +331,7 @@ class _ModernSettingsPageState extends State<ModernSettingsPage> {
       backgroundNotifyAllowedPatterns: _backgroundNotifyAllowedPatterns,
       backgroundServiceTitle: _backgroundServiceTitleController.text.trim().isEmpty ? null : _backgroundServiceTitleController.text.trim(),
       backgroundServiceText: _backgroundServiceTextController.text.trim().isEmpty ? null : _backgroundServiceTextController.text.trim(),
-      serverApiUrl: _serverApiUrlController.text.trim(),
+      serverApiUrl: AppConfig.serverApiUrl,
     );
 
     final result = await _di.saveSettings(settings);

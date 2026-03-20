@@ -26,6 +26,13 @@ import '../../../features/maps_old/domain/usecases/reverse_geocode.dart';
 import '../../../features/maps_old/presentation/controllers/map_controller.dart';
 import '../../../features/location_tracker/data/repositories/location_tracker_repository.dart';
 import '../../../features/location_tracker/presentation/controllers/location_tracker_controller.dart';
+import '../network/connectivity_service.dart';
+import '../sync/sync_service.dart';
+import '../../../features/history/data/datasources/watch_response_dao.dart';
+import '../../../features/history/data/repositories/watch_response_repository.dart';
+import '../../../features/location_tracker/presentation/controllers/visit_question_orchestrator.dart';
+import '../../../features/ble_old/presentation/controllers/messages_controller.dart';
+import '../geofence/geofence_service.dart';
 
 /// Simple dependency injection container
 class DependencyInjection {
@@ -65,6 +72,13 @@ class DependencyInjection {
 
   late final LocationTrackerRepository _locationTrackerRepository;
   late final LocationTrackerController _locationTrackerController;
+
+  // History / sync
+  late final WatchResponseDao _watchResponseDao;
+  late final WatchResponseRepository _watchResponseRepository;
+  late final ConnectivityService _connectivityService;
+  late final SyncService _syncService;
+  late final VisitQuestionOrchestrator _visitQuestionOrchestrator;
 
   /// Initialize dependencies
   Future<void> initialize({bool mockMode = false}) async {
@@ -125,6 +139,29 @@ class DependencyInjection {
     );
     await _locationTrackerController.loadData();
 
+    // History / sync
+    _watchResponseDao = WatchResponseDao();
+    _watchResponseRepository = WatchResponseRepository(dao: _watchResponseDao);
+    _connectivityService = ConnectivityService();
+    _syncService = SyncService(
+      repository: _watchResponseRepository,
+      connectivity: _connectivityService,
+      serverUrlProvider: () => settings.serverApiUrl,
+    );
+
+    _visitQuestionOrchestrator = VisitQuestionOrchestrator(
+      responseRepository: _watchResponseRepository,
+      messagesController: MessagesController(),
+    );
+
+    // Start geofence background service
+    GeofenceService().init(
+      getLocation: _getCurrentLocation,
+      tracker: _locationTrackerController,
+      orchestrator: _visitQuestionOrchestrator,
+    );
+    GeofenceService().start();
+
     _initialized = true;
   }
 
@@ -151,4 +188,12 @@ class DependencyInjection {
   // Background services (singletons, can be accessed directly or via DI)
   BleForegroundServiceManager get foregroundService => BleForegroundServiceManager();
   NotificationService get notificationService => NotificationService();
+
+  // History / sync
+  WatchResponseDao get watchResponseDao => _watchResponseDao;
+  WatchResponseRepository get watchResponseRepository => _watchResponseRepository;
+  ConnectivityService get connectivityService => _connectivityService;
+  SyncService get syncService => _syncService;
+  VisitQuestionOrchestrator get visitQuestionOrchestrator => _visitQuestionOrchestrator;
+  GeofenceService get geofenceService => GeofenceService();
 }

@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Painel Admin | Relogio Blutu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="/admin/admin.css" />
+</head>
+
+<body class="admin-body">
+  <div class="admin-layout">
+    <aside class="admin-sidebar">
+      <div class="brand-block">
+        <span class="eyebrow">Servidor Privado</span>
+        <h1>Relogio Blutu</h1>
+        <p>Painel de configuração e observabilidade do backend.</p>
+      </div>
+      <nav class="admin-nav">
+        <a href="/admin/config" data-nav="config">Configuração</a>
+        <a href="/admin/dashboard" data-nav="dashboard">Dashboard</a>
+      </nav>
+      <div class="sidebar-foot">
+        <span id="session-email"></span>
+        <button id="logout-button" class="ghost-btn">Sair</button>
+      </div>
+    </aside>
+
+    <main class="admin-main">
+      <header class="admin-topbar">
+        <div>
+          <span class="eyebrow">Administração</span>
+          <h2 id="page-title">Configuração de Locais</h2>
+        </div>
+        <div class="topbar-actions">
+          <button id="refresh-button" class="ghost-btn">Atualizar</button>
+        </div>
+      </header>
+
+      <section id="config-view" class="view-section">
+        <div class="grid-two">
+          <section class="panel-card">
+            <div class="panel-head">
+              <div>
+                <span class="eyebrow">Descoberta</span>
+                <h3>Buscar cidade e locais públicos</h3>
+              </div>
+            </div>
+            <div class="field-row">
+              <label class="field grow">
+                <span>Cidade</span>
+                <input id="city-query" type="text" placeholder="Ex: Sinop" />
+              </label>
+              <button id="city-search-button" class="primary-btn compact">Buscar cidade</button>
+            </div>
+            <div id="city-results" class="result-list"></div>
+            <div class="field-row">
+              <button id="public-places-button" class="ghost-btn compact">Procurar locais públicos</button>
+              <button id="reload-catalog-button" class="ghost-btn compact">Recarregar locais salvos</button>
+            </div>
+            <div id="places-results" class="result-list places-list"></div>
+          </section>
+
+          <section class="panel-card tall-card">
+            <div class="panel-head">
+              <div>
+                <span class="eyebrow">Mapa</span>
+                <h3>Posicionamento e validação</h3>
+              </div>
+              <span id="validation-pill" class="status-pill neutral">Aguardando validação</span>
+            </div>
+            <div id="admin-map" class="admin-map"></div>
+            <div id="validation-message" class="helper-text"></div>
+          </section>
+        </div>
+
+        <div class="grid-two bottom-grid">
+          <section class="panel-card">
+            <div class="panel-head">
+              <div>
+                <span class="eyebrow">Configuração</span>
+                <h3>Local monitorado</h3>
+              </div>
+            </div>
+            <form id="location-form" class="stack-form">
+              <input id="location-id" type="hidden" />
+              <label class="field">
+                <span>Nome do local</span>
+                <input id="location-name" type="text" placeholder="Praça, campus, órgão público..." required />
+              </label>
+              <label class="field">
+                <span>Cidade</span>
+                <input id="location-city" type="text" placeholder="Cidade selecionada" required />
+              </label>
+              <div class="field-grid-3">
+                <label class="field">
+                  <span>Latitude</span>
+                  <input id="location-latitude" type="number" step="0.000001" required />
+                </label>
+                <label class="field">
+                  <span>Longitude</span>
+                  <input id="location-longitude" type="number" step="0.000001" required />
+                </label>
+                <label class="field">
+                  <span>Raio (m)</span>
+                  <input id="location-radius" type="number" min="10" step="10" value="120" />
+                </label>
+              </div>
+              <label class="field">
+                <span>Regras do local</span>
+                <textarea id="location-rules" rows="4"
+                  placeholder="Uma por linha no formato: tipo|valor|prioridade&#10;Ex: notify|Avisar ao entrar no local|1"></textarea>
+              </label>
+              <div class="field-row">
+                <button id="validate-location-button" type="button" class="ghost-btn compact">Validar
+                  localização</button>
+                <button type="submit" class="primary-btn compact">Salvar local</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="panel-card">
+            <div class="panel-head">
+              <div>
+                <span class="eyebrow">Pergunta vinculada</span>
+                <h3>Mensagem para o relógio</h3>
+              </div>
+            </div>
+            <form id="question-form" class="stack-form">
+              <input id="question-id" type="hidden" />
+              <label class="field">
+                <span>Pergunta</span>
+                <textarea id="question-prompt" rows="3" placeholder="Ex: Você chegou ao ponto monitorado?"></textarea>
+              </label>
+              <div id="question-options-container" class="stack-form" style="margin-top: 0">
+                <!-- Opções inseridas via JS -->
+              </div>
+              <button type="button" id="add-option-btn" class="ghost-btn compact" style="margin-top: -8px;">+ Adicionar
+                Opção (Máx 4)</button>
+              <label class="checkbox-field">
+                <input id="question-reactive-enabled" type="checkbox" checked />
+                <span>Ativar envio reativo para o dispositivo</span>
+              </label>
+              <div class="field-row">
+                <button id="clear-question-button" type="button" class="ghost-btn compact">Limpar pergunta</button>
+                <button type="submit" class="primary-btn compact">Salvar pergunta vinculada</button>
+              </div>
+            </form>
+          </section>
+        </div>
+
+        <section class="panel-card">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">Catálogo atual</span>
+              <h3>Locais configurados no servidor</h3>
+            </div>
+          </div>
+          <div id="saved-locations" class="saved-locations"></div>
+        </section>
+      </section>
+
+      <section id="dashboard-view" class="view-section hidden">
+        <div class="stats-grid" id="stats-grid"></div>
+        <div class="grid-two">
+          <section class="panel-card">
+            <div class="panel-head">
+              <div>
+                <span class="eyebrow">Coleta</span>
+                <h3>Volume recente de respostas</h3>
+              </div>
+            </div>
+            <div style="position: relative; height: 260px; width: 100%;">
+              <canvas id="responses-line-chart"></canvas>
+            </div>
+          </section>
+          <section class="panel-card">
+            <div class="panel-head">
+              <div>
+                <span class="eyebrow">Status</span>
+                <h3>Distribuição do processamento</h3>
+              </div>
+            </div>
+            <div style="position: relative; height: 260px; width: 100%;">
+              <canvas id="responses-status-chart"></canvas>
+            </div>
+          </section>
+        </div>
+        <div class="grid-two bottom-grid">
+          <section class="panel-card">
+            <div class="panel-head">
+              <div>
+                <span class="eyebrow">Cidades</span>
+                <h3>Origem das respostas</h3>
+              </div>
+            </div>
+            <div id="top-cities" class="city-bars"></div>
+          </section>
+          <section class="panel-card">
+            <div class="panel-head">
+              <div>
+                <span class="eyebrow">Dispositivos</span>
+                <h3>Última atividade</h3>
+              </div>
+            </div>
+            <div id="recent-devices" class="device-list"></div>
+          </section>
+        </div>
+        <section class="panel-card">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">Respostas recebidas</span>
+              <h3>Eventos recentes do aplicativo</h3>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Recebido em</th>
+                  <th>Dispositivo</th>
+                  <th>Pergunta</th>
+                  <th>Resposta</th>
+                  <th>Cidade</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="responses-table"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="/admin/admin.js" defer></script>
+</body>
+
+</html>

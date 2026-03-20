@@ -5,7 +5,6 @@ import '../../../dashboard/presentation/pages/dashboard_page.dart';
 import '../../../ble/presentation/pages/connect_device_page.dart';
 import '../../../maps/presentation/pages/map_page.dart';
 import '../../../settings/presentation/pages/settings_page.dart';
-
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -82,30 +81,24 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final safeIndex = _currentIndex >= _pages.length ? 0 : _currentIndex;
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        if (_currentIndex != 0) {
-          // Nav back to first tab instead of popping this screen
+        if (safeIndex != 0) {
           setState(() => _currentIndex = 0);
-        } else {
-          // Already at root tab: exit app
-          // ignore: deprecated_member_use
         }
       },
       child: Scaffold(
         body: IndexedStack(
-          index: _currentIndex,
+          index: safeIndex,
           children: _pages,
         ),
         bottomNavigationBar: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
+          currentIndex: safeIndex,
+          onTap: (index) => setState(() => _currentIndex = index),
           type: BottomNavigationBarType.fixed,
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           selectedItemColor: Colors.cyanAccent,

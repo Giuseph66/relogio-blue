@@ -45,6 +45,8 @@ const String bleQuestionErrorHeader = 'QERR';
 const int bleQuestionMaxOptions = 4;
 const int bleQuestionMinOptions = 2;
 const int bleQuestionMaxPayloadLength = 140;
+// Max questionId length so that QANS|<id>|<answer> fits in one 20-byte BLE packet.
+const int bleQuestionIdMaxLength = 10;
 
 String sanitizeBleQuestionText(
   String value, {
@@ -64,8 +66,18 @@ String sanitizeBleQuestionText(
   return collapsed.substring(0, maxLength).trim();
 }
 
+/// Normalizes an existing QST command so the questionId respects [bleQuestionIdMaxLength].
+/// Used when resending old commands stored in the database with longer IDs.
+String normalizeBleCommandId(String command) {
+  final parts = command.split('|');
+  if (parts.length < 2) return command;
+  if (parts[1].length <= bleQuestionIdMaxLength) return command;
+  parts[1] = parts[1].substring(0, bleQuestionIdMaxLength);
+  return parts.join('|');
+}
+
 String buildBleQuestionCommand(BleQuestionPrompt prompt) {
-  final safeQuestionId = sanitizeBleQuestionText(prompt.questionId, maxLength: 18);
+  final safeQuestionId = sanitizeBleQuestionText(prompt.questionId, maxLength: bleQuestionIdMaxLength);
   final safeQuestion = sanitizeBleQuestionText(prompt.question, maxLength: 44);
   final optionTokens = prompt.options
       .take(bleQuestionMaxOptions)

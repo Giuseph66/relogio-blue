@@ -31,6 +31,12 @@ class MessagesController {
   Stream<List<BleMessage>> get messages => _messagesController.stream;
   Stream<TickStatus> get tickStatus => _tickStatusController.stream;
 
+  /// Whether the watch is currently considered online (sent a tick in the last 8s).
+  bool get isWatchOnline => _lastTickStatus.online;
+
+  /// Whether a BLE device is currently connected (lower-level check, no tick required).
+  bool get isWatchConnected => _di.bleRepository.getConnectedDeviceId() != null;
+
   List<BleMessage> _messages = [];
   StreamSubscription<List<int>>? _subscribeSubscription;
   int _messageIdCounter = 0;
@@ -38,54 +44,87 @@ class MessagesController {
   TickStatus _lastTickStatus = const TickStatus();
   AppLifecycleState? _appLifecycleState;
 
+  // ── BLE fragment reassembly ──────────────────────────────────────────────
+  // BLE notifications are limited to ATT_MTU-3 bytes per packet (often 20 bytes).
+  // Protocol messages like QANS can exceed this limit and arrive fragmented.
+  // We buffer incoming data and flush it after a short idle gap.
+  String _rxBuffer = '';
+  Timer? _rxFlushTimer;
+  // Short idle gap for generic messages; longer for incomplete protocol frames.
+  static const Duration _rxBufferTimeout = Duration(milliseconds: 300);
+  static const Duration _rxProtocolTimeout = Duration(milliseconds: 1500);
+
   /// Start listening to messages
   void _startListening() {
     _di.subscribeToMessages().then((stream) {
       _subscribeSubscription = stream.listen(
-      (data) {
-        try {
-          // First, try to decode as UTF-8
-          final content = utf8.decode(data);
-          
-          // Check if it's a tick message - if so, update status and don't add to messages
-          if (_tryUpdateTickFromText(content)) {
-            return; // Tick message processed, don't add to message list
-          }
-          
-          // Not a tick message, add it to the message list
-          final message = model.BleMessageModel(
-            id: 'msg_${_messageIdCounter++}',
-            content: content,
-            direction: MessageDirection.rx,
-            timestamp: DateTime.now(),
-          );
-          _addMessage(message);
-          // Handle background notifications
-          _handleRxMessage(content);
-        } catch (e) {
-          // If not UTF-8, try to extract tick from raw data
-          if (_tryUpdateTickFromData(data)) {
-            return; // Tick message processed, don't add to message list
-          }
-          
-          // Not a tick message, show as hex
-          final hex = data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
-          final message = model.BleMessageModel(
-            id: 'msg_${_messageIdCounter++}',
-            content: 'HEX: $hex',
-            direction: MessageDirection.rx,
-            timestamp: DateTime.now(),
-          );
-          _addMessage(message);
-          // Handle background notifications
-          _handleRxMessage('HEX: $hex');
-        }
-      },
-      onError: (error) {
-        // Handle error
-      },
-    );
+        _onRawBleData,
+        onError: (_) {},
+      );
     });
+  }
+
+  /// Handles a single BLE notification packet.
+  ///
+  /// Tick messages are processed immediately (they are always short).
+  /// All other data is accumulated in [_rxBuffer] and processed once
+  /// [_rxBufferTimeout] elapses without new data — this reassembles
+  /// QANS/QERR protocol messages that span multiple 20-byte BLE packets.
+  void _onRawBleData(List<int> data) {
+    String content;
+    try {
+      content = utf8.decode(data);
+    } catch (_) {
+      // Non-UTF8: keep printable ASCII chars only
+      if (_tryUpdateTickFromData(data)) return;
+      content = data
+          .where((b) => b >= 32 && b <= 126)
+          .map((b) => String.fromCharCode(b))
+          .join();
+    }
+
+    // Tick messages are short (≤8 bytes) and always arrive in a single packet.
+    // Process them immediately so the online/offline state stays accurate.
+    if (_tryUpdateTickFromText(content)) return;
+
+    // Accumulate content.
+    _rxBuffer += content;
+    _rxFlushTimer?.cancel();
+
+    // If the buffer now forms a complete protocol message (e.g. QANS with all 3
+    // pipe-separated parts), flush immediately — no need to wait.
+    if (_isCompleteProtocolMessage(_rxBuffer)) {
+      _flushRxBuffer();
+      return;
+    }
+
+    // If we have the start of a protocol message but it's still incomplete,
+    // use a longer timeout to give the remaining fragment time to arrive.
+    final timeout = _rxBuffer.startsWith('QANS|') || _rxBuffer.startsWith('QERR|')
+        ? _rxProtocolTimeout
+        : _rxBufferTimeout;
+    _rxFlushTimer = Timer(timeout, _flushRxBuffer);
+  }
+
+  /// Flushes the reassembly buffer as a single complete message.
+  void _flushRxBuffer() {
+    // Remove null bytes and other control chars that ESP32 uses to pad
+    // BLE notifications to the full 20-byte ATT payload.
+    final assembled = _rxBuffer
+        .replaceAll('\x00', '')
+        .replaceAll(RegExp(r'[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]'), '')
+        .trim();
+    _rxBuffer = '';
+    if (assembled.isEmpty) return;
+
+    final message = model.BleMessageModel(
+      id: 'msg_${_messageIdCounter++}',
+      content: assembled,
+      direction: MessageDirection.rx,
+      timestamp: DateTime.now(),
+    );
+    _addMessage(message);
+    _handleRxMessage(assembled);
   }
 
   /// Add message to list
@@ -142,6 +181,7 @@ class MessagesController {
   /// Dispose
   void dispose() {
     // Singleton: keep streams alive for the app lifetime.
+    _rxFlushTimer?.cancel();
   }
 
   bool _tryUpdateTickFromData(List<int> data) {
@@ -183,6 +223,14 @@ class MessagesController {
       online: true,
     );
     _tickStatusController.add(_lastTickStatus);
+  }
+
+  /// Returns true if the buffer already contains a complete QANS/QERR message
+  /// (exactly 3 pipe-separated, non-empty parts).
+  bool _isCompleteProtocolMessage(String buffer) {
+    if (!buffer.startsWith('QANS|') && !buffer.startsWith('QERR|')) return false;
+    final parts = buffer.split('|');
+    return parts.length >= 3 && parts[1].isNotEmpty && parts[2].isNotEmpty;
   }
 
   String _normalizeText(String content) {

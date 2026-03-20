@@ -1,0 +1,8 @@
+cron:
+- description: Process pending response batches
+  url: /internal/jobs/process-pending?batchSize=100
+  schedule: every 5 minutes
+
+- description: Daily maintenance and stale job recovery
+  url: /internal/jobs/maintenance
+  schedule: every 24 hours
