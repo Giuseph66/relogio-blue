@@ -645,10 +645,8 @@ class BleForegroundTaskHandler extends TaskHandler {
 
     try {
       final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
-          timeLimit: Duration(seconds: 5),
-        ),
+        desiredAccuracy: LocationAccuracy.medium,
+        timeLimit: const Duration(seconds: 5),
       );
 
       _lastGeofenceCheckAt = DateTime.now();

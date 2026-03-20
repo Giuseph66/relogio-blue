@@ -45,8 +45,11 @@ class BleController {
   }
 
   Future<void> _initialize() async {
-    // Check permissions
-    final hasPermissions = await PermissionHelper.checkBlePermissions();
+    // Request permissions automatically if not granted
+    bool hasPermissions = await PermissionHelper.checkBlePermissions();
+    if (!hasPermissions) {
+      hasPermissions = await PermissionHelper.requestBlePermissions();
+    }
     _permissionsGrantedController.add(hasPermissions);
 
     // Check Bluetooth

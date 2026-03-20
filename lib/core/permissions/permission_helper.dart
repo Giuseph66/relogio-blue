@@ -10,14 +10,14 @@ class PermissionHelper {
       // Android 12+ (API 31+)
       final bluetoothScan = await ph.Permission.bluetoothScan.request();
       final bluetoothConnect = await ph.Permission.bluetoothConnect.request();
-      
-      if (bluetoothScan.isGranted && bluetoothConnect.isGranted) {
-        AppLogger.info('Permissões BLE concedidas');
+      final location = await ph.Permission.locationWhenInUse.request();
+
+      if (bluetoothScan.isGranted && bluetoothConnect.isGranted && location.isGranted) {
+        AppLogger.info('Permissões BLE e localização concedidas');
         return true;
       }
-      
+
       // Fallback for older Android versions
-      final location = await ph.Permission.locationWhenInUse.request();
       if (location.isGranted) {
         AppLogger.info('Permissão de localização concedida (fallback)');
         return true;
