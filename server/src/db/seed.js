@@ -168,6 +168,50 @@ async function seedDatabase(db, enabled) {
       ],
     );
   }
+
+  // Check and seed responses for Sinop (if none exist)
+  const responseCount = await db.get(`SELECT COUNT(*) as count FROM responses WHERE city = ?`, [normalizeCity('Sinop')]);
+
+  if (responseCount && responseCount.count === 0) {
+    const sinopQuestion = await db.get(`
+      SELECT q.id, q.location_id 
+      FROM questions q 
+      JOIN locations l ON q.location_id = l.id 
+      WHERE l.name = 'Campus Sinop' 
+      LIMIT 1
+    `);
+
+    if (sinopQuestion) {
+      // First, create a dummy device for the responses
+      const deviceId = createId('dev');
+      await db.run(
+        `INSERT OR IGNORE INTO devices (id, name, status, created_at, updated_at) VALUES (?, ?, 'active', ?, ?)`,
+        [deviceId, 'Relógio Aluno Exemplo', timestamp, timestamp]
+      );
+
+      // Insert 5 generic 'SIM' responses
+      for (let i = 0; i < 5; i++) {
+        await db.run(
+          `
+            INSERT INTO responses (
+              id, external_id, device_id, question_id, answer_id, answer_text, city, status, raw_payload_json, submitted_at, received_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'processed', '{}', ?, ?)
+          `,
+          [
+            createId('rsp'),
+            createId('ext'), // Some external id
+            deviceId,
+            sinopQuestion.id,
+            'SIM',
+            'Sim',
+            normalizeCity('Sinop'),
+            timestamp,
+            timestamp
+          ]
+        );
+      }
+    }
+  }
 }
 
 module.exports = { seedDatabase };
