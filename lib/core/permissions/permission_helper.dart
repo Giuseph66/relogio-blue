@@ -51,6 +51,20 @@ class PermissionHelper {
     }
   }
   
+  /// Request all app permissions: BLE, location and notifications
+  static Future<void> requestAllPermissions() async {
+    try {
+      await [
+        ph.Permission.bluetoothScan,
+        ph.Permission.bluetoothConnect,
+        ph.Permission.locationWhenInUse,
+        ph.Permission.notification,
+      ].request();
+    } catch (e) {
+      AppLogger.error('Erro ao solicitar permissões', e);
+    }
+  }
+
   /// Request location permission (for older Android versions)
   static Future<bool> requestLocationPermission() async {
     try {

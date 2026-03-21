@@ -7,6 +7,7 @@ import '../../../maps_old/presentation/controllers/map_controller.dart';
 import '../../../maps_old/presentation/widgets/permission_state_view.dart';
 import '../../../maps_old/domain/entities/map_location.dart';
 import '../../../../core/geofence/geofence_service.dart';
+import '../../../../core/permissions/permission_helper.dart';
 import '../../../location_tracker/presentation/controllers/location_tracker_controller.dart';
 import '../../../location_tracker/presentation/widgets/add_location_dialog.dart';
 
@@ -50,12 +51,20 @@ class _ModernMapPageState extends State<ModernMapPage> {
     _trackerController.addListener(_onTrackerUpdated);
     _setupListeners();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _mapController.fetchMyLocation();
+      _initWithPermissionCheck();
     });
   }
 
   void _onTrackerUpdated() {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _initWithPermissionCheck() async {
+    await PermissionHelper.requestAllPermissions();
+    final granted = await _mapController.requestPermission();
+    if (granted) {
+      _mapController.fetchMyLocation();
+    }
   }
 
   void _setupListeners() {
