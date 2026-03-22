@@ -1,0 +1,115 @@
+COMANDOS DO APP WEAR OS
+Projeto: /home/jesus/faculdade/relogio-blutu
+Modulo nativo do relogio: android/wearapp
+
+1. COMPILAR O APK DEBUG
+Use este comando para gerar o APK do app do relogio.
+
+cd /home/jesus/faculdade/relogio-blutu/android
+./gradlew :wearapp:assembleDebug
+
+O APK gerado fica em:
+/home/jesus/faculdade/relogio-blutu/build/wearapp/outputs/apk/debug/wearapp-debug.apk
+
+
+2. RODAR OS TESTES UNITARIOS
+Use este comando para validar a logica do protocolo antes de instalar.
+
+cd /home/jesus/faculdade/relogio-blutu/android
+./gradlew :wearapp:testDebugUnitTest
+
+
+3. LIMPAR E REBUILDAR
+Use quando quiser recompilar tudo do zero.
+
+cd /home/jesus/faculdade/relogio-blutu/android
+./gradlew :wearapp:clean :wearapp:assembleDebug
+
+
+4. LISTAR DEVICES ADB
+Mostra celulares, emuladores e relogios conectados.
+
+adb devices -l
+
+
+5. INSTALAR O APK NO RELOGIO OU EMULADOR
+Substitui a versao antiga pela nova.
+
+adb -s emulator-5554 install -r /home/jesus/faculdade/relogio-blutu/build/wearapp/outputs/apk/debug/wearapp-debug.apk
+
+Se quiser instalar no device padrao:
+
+adb install -r /home/jesus/faculdade/relogio-blutu/build/wearapp/outputs/apk/debug/wearapp-debug.apk
+
+
+6. ABRIR O APP NO RELOGIO
+Inicia a activity principal do app Wear.
+
+adb -s emulator-5554 shell am start -n com.example.relogio.wearapp/com.example.relogio.wearapp.ui.WearAppActivity
+
+
+7. FECHAR O APP
+Forca o encerramento do app.
+
+adb -s emulator-5554 shell am force-stop com.example.relogio.wearapp
+
+
+8. DESINSTALAR O APP
+Remove o app do relogio ou emulador.
+
+adb -s emulator-5554 uninstall com.example.relogio.wearapp
+
+
+9. REINSTALAR DO ZERO
+Bom quando a instalacao incremental falha ou quando voce quer garantir uma versao limpa.
+
+adb -s emulator-5554 uninstall com.example.relogio.wearapp
+adb -s emulator-5554 install /home/jesus/faculdade/relogio-blutu/build/wearapp/outputs/apk/debug/wearapp-debug.apk
+
+
+10. VER LOGS DO APP
+Mostra logs do app, servico BLE e erros de runtime.
+
+adb -s emulator-5554 logcat | rg "com.example.relogio.wearapp|WearBleService|BlePeripheralController|AndroidRuntime"
+
+
+11. ABRIR O APP E ESPERAR A INICIALIZACAO
+Bom para confirmar que a activity abriu com sucesso.
+
+adb -s emulator-5554 shell am start -W -n com.example.relogio.wearapp/com.example.relogio.wearapp.ui.WearAppActivity
+
+
+12. CAPTURAR SCREENSHOT DO RELOGIO
+Salva uma imagem da tela atual do emulador ou relogio.
+
+adb -s emulator-5554 exec-out screencap -p > /home/jesus/faculdade/relogio-blutu/wear-screenshot.png
+
+
+13. DIFERENCA ENTRE FLUTTER E O APP WEAR
+O app Flutter principal usa comandos como:
+
+flutter run
+
+Mas o app do relogio que criamos NAO usa flutter run.
+Ele e um modulo Android nativo chamado :wearapp.
+Por isso, para o relogio, o fluxo correto e:
+
+./gradlew :wearapp:assembleDebug
+adb install -r ...
+adb shell am start ...
+
+
+14. COMANDO RAPIDO COMPLETO
+Compila, instala e abre o app do relogio.
+
+cd /home/jesus/faculdade/relogio-blutu/android
+./gradlew :wearapp:assembleDebug
+adb -s emulator-5554 install -r /home/jesus/faculdade/relogio-blutu/build/wearapp/outputs/apk/debug/wearapp-debug.apk
+adb -s emulator-5554 shell am start -n com.example.relogio.wearapp/com.example.relogio.wearapp.ui.WearAppActivity
+
+
+15. OBSERVACAO SOBRE O DEVICE
+Se o nome do seu emulador nao for emulator-5554, troque esse valor pelo device certo.
+Voce descobre isso com:
+
+adb devices -l

@@ -141,7 +141,7 @@ class BleForegroundServiceManager {
     }
 
     try {
-      final title = deviceName ?? 'Relogio BLE';
+      final title = deviceName ?? 'GeoNexo Mobile';
       final text = 'Conectado e recebendo mensagens';
       _currentNotificationTitle = title;
       _currentNotificationText = text;
@@ -203,7 +203,7 @@ class BleForegroundServiceManager {
 
     try {
       final updatedTitle =
-          title ?? _currentNotificationTitle ?? _currentDeviceName ?? 'Relogio BLE';
+          title ?? _currentNotificationTitle ?? _currentDeviceName ?? 'GeoNexo Mobile';
       final updatedText =
           text ?? _currentNotificationText ?? 'Conectado e recebendo mensagens';
       _currentNotificationTitle = updatedTitle;
@@ -584,7 +584,7 @@ class BleForegroundTaskHandler extends TaskHandler {
     AppLogger.debug('FG RX: $content');
     final preview = content.length > 50 ? '${content.substring(0, 47)}...' : content;
     FlutterForegroundTask.updateService(
-      notificationTitle: _deviceName ?? 'Relogio BLE',
+      notificationTitle: _deviceName ?? 'GeoNexo Mobile',
       notificationText: 'Ultima mensagem: $preview',
     );
 
@@ -798,7 +798,7 @@ class BleForegroundTaskHandler extends TaskHandler {
 
   void _updateStatusNotification(String text) {
     FlutterForegroundTask.updateService(
-      notificationTitle: _deviceName ?? 'Relogio BLE',
+      notificationTitle: _deviceName ?? 'GeoNexo Mobile',
       notificationText: text,
     );
   }

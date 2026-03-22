@@ -20,7 +20,7 @@ class AppDrawer extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 Text(
-                  'Relógio BLE',
+                  'GeoNexo Mobile',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 28,
@@ -29,7 +29,7 @@ class AppDrawer extends StatelessWidget {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'Controle via Bluetooth',
+                  'Conexão, contexto e respostas',
                   style: TextStyle(
                     color: Colors.white70,
                     fontSize: 14,

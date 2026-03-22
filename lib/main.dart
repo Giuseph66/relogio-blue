@@ -40,7 +40,7 @@ class MyApp extends StatelessWidget {
       valueListenable: UiModeManager().useModernUiNotifier,
       builder: (context, isModernUi, child) {
         return MaterialApp(
-          title: 'Relógio App',
+          title: 'GeoNexo Mobile',
           theme: AppTheme.darkTheme,
           initialRoute: AppRoutes.dashboard,
           onGenerateRoute: AppRoutes.generateRoute,

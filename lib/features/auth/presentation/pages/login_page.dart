@@ -119,7 +119,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 24),
                       const Text(
-                        'Relógio Blutu',
+                        'GeoNexo',
                         style: TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.w800,
@@ -129,7 +129,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Gestão operacional e telemetria',
+                        'GeoNexo Admin',
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.5),
                           fontSize: 15,
