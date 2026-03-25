@@ -71,6 +71,10 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
       if (!mounted) return;
       setState(() => _connectionState = state);
     });
+    // Rebuild quando o tick status mudar para refletir isWatchConnected
+    _messagesController.tickStatus.listen((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -95,7 +99,8 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isConnected = _connectionState == ble.ConnectionState.connected;
+    final isConnected = _connectionState == ble.ConnectionState.connected ||
+        _messagesController.isWatchConnected;
 
     return Scaffold(
       appBar: AppBar(
@@ -506,7 +511,9 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
   }
 
   Future<void> _sendMessage([String? text]) async {
-    if (_connectionState != ble.ConnectionState.connected) {
+    final canSend = _connectionState == ble.ConnectionState.connected ||
+        _messagesController.isWatchConnected;
+    if (!canSend) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -559,7 +566,9 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
   }
 
   Future<void> _showQuestionComposer() async {
-    if (_connectionState != ble.ConnectionState.connected) {
+    final canSend = _connectionState == ble.ConnectionState.connected ||
+        _messagesController.isWatchConnected;
+    if (!canSend) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

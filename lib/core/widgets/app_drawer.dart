@@ -20,7 +20,7 @@ class AppDrawer extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 Text(
-                  'GeoNexo Mobile',
+                  'GeoNexo',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 28,

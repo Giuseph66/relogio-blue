@@ -15,6 +15,7 @@ import com.example.relogio.wearapp.R
 import com.example.relogio.wearapp.ble.BlePeripheralController
 import com.example.relogio.wearapp.ble.BleProtocolEngine
 import com.example.relogio.wearapp.ble.WearBleStore
+import com.example.relogio.wearapp.model.ActiveQuestion
 import com.example.relogio.wearapp.model.PeripheralStatus
 import com.example.relogio.wearapp.ui.WearAppActivity
 import kotlinx.coroutines.CoroutineScope
@@ -33,10 +34,12 @@ class WearBleService : Service() {
     private lateinit var controller: BlePeripheralController
     private val engine = BleProtocolEngine()
     private var tickJob: Job? = null
+    private var lastPresentedQuestionDeadlineAt: Long? = null
+    private var lastQuestionPresentationAttemptAt = 0L
 
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
+        createNotificationChannels()
         controller =
             BlePeripheralController(
                 context = this,
@@ -136,6 +139,7 @@ class WearBleService : Service() {
     override fun onDestroy() {
         tickJob?.cancel()
         controller.stop()
+        cancelQuestionNotification()
         if (WearBleStore.state.value.serviceRunning) {
             WearBleStore.update {
                 it.copy(
@@ -190,6 +194,7 @@ class WearBleService : Service() {
     private fun stopPeripheral() {
         tickJob?.cancel()
         controller.stop()
+        cancelQuestionNotification()
         WearBleStore.update {
             it.copy(
                 serviceRunning = false,
@@ -215,6 +220,64 @@ class WearBleService : Service() {
                 activeQuestion = snapshot.activeQuestion,
             )
         }
+        maybePresentQuestion(snapshot.activeQuestion)
+    }
+
+    private fun maybePresentQuestion(question: ActiveQuestion?) {
+        if (question == null) {
+            lastPresentedQuestionDeadlineAt = null
+            lastQuestionPresentationAttemptAt = 0L
+            cancelQuestionNotification()
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        val isSameQuestion = lastPresentedQuestionDeadlineAt == question.deadlineAtMillis
+        if (isSameQuestion && now - lastQuestionPresentationAttemptAt < QUESTION_PRESENTATION_RETRY_MS) {
+            return
+        }
+        lastPresentedQuestionDeadlineAt = question.deadlineAtMillis
+        lastQuestionPresentationAttemptAt = now
+
+        val activityIntent = Intent(this, WearAppActivity::class.java).apply {
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP,
+            )
+            putExtra(EXTRA_OPEN_QUESTION, true)
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            QUESTION_REQUEST_CODE,
+            activityIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val notification = NotificationCompat.Builder(this, QUESTION_CHANNEL_ID)
+            .setContentTitle(getString(R.string.question_notification_title))
+            .setContentText(
+                question.question.ifBlank { getString(R.string.question_notification_text) },
+            )
+            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setFullScreenIntent(pendingIntent, true)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .build()
+
+        getSystemService(NotificationManager::class.java).notify(QUESTION_NOTIFICATION_ID, notification)
+
+        // Tenta trazer a activity diretamente caso ela já esteja em foreground
+        startActivity(activityIntent)
+    }
+
+    private fun cancelQuestionNotification() {
+        getSystemService(NotificationManager::class.java).cancel(QUESTION_NOTIFICATION_ID)
     }
 
     private fun flushOutgoing() {
@@ -247,28 +310,43 @@ class WearBleService : Service() {
             .build()
     }
 
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return
-        }
-
-        val channel =
-            NotificationChannel(
-                CHANNEL_ID,
-                getString(R.string.notification_channel_name),
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                description = getString(R.string.notification_channel_description)
-            }
+    private fun createNotificationChannels() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
 
         val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(channel)
+
+        // Canal do serviço BLE em background (prioridade baixa, silencioso)
+        val serviceChannel = NotificationChannel(
+            CHANNEL_ID,
+            getString(R.string.notification_channel_name),
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = getString(R.string.notification_channel_description)
+        }
+
+        // Canal de perguntas (prioridade alta, acende a tela)
+        val questionChannel = NotificationChannel(
+            QUESTION_CHANNEL_ID,
+            getString(R.string.question_channel_name),
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = getString(R.string.question_channel_description)
+            enableVibration(true)
+            enableLights(true)
+        }
+
+        manager.createNotificationChannel(serviceChannel)
+        manager.createNotificationChannel(questionChannel)
     }
 
     companion object {
         private const val CHANNEL_ID = "wear_ble_service"
+        private const val QUESTION_CHANNEL_ID = "wear_ble_question"
         private const val NOTIFICATION_ID = 2107
+        private const val QUESTION_NOTIFICATION_ID = 2108
+        private const val QUESTION_REQUEST_CODE = 42
         private const val TICK_POLL_MS = 250L
+        private const val QUESTION_PRESENTATION_RETRY_MS = 2_000L
 
         private const val ACTION_START = "com.example.relogio.wearapp.action.START"
         private const val ACTION_STOP = "com.example.relogio.wearapp.action.STOP"
@@ -276,6 +354,7 @@ class WearBleService : Service() {
         private const val ACTION_CLEAR_LOGS = "com.example.relogio.wearapp.action.CLEAR_LOGS"
         private const val EXTRA_COMMAND = "extra_command"
         private const val EXTRA_ACTION_LABEL = "extra_action_label"
+        const val EXTRA_OPEN_QUESTION = "extra_open_question"
 
         fun startIntent(context: Context): Intent =
             Intent(context, WearBleService::class.java).setAction(ACTION_START)

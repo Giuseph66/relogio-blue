@@ -11,6 +11,9 @@ import '../models/ble_device_model.dart';
 
 /// Data source for BLE operations using flutter_reactive_ble
 class ReactiveBleDataSource {
+  static const int _writeChunkSize = 20;
+  static const Duration _writeChunkDelay = Duration(milliseconds: 60);
+
   final FlutterReactiveBle _ble;
   final bool _mockMode;
   StreamSubscription<DiscoveredDevice>? _scanSubscription;
@@ -26,8 +29,8 @@ class ReactiveBleDataSource {
   ReactiveBleDataSource({
     required FlutterReactiveBle ble,
     bool mockMode = false,
-  })  : _ble = ble,
-        _mockMode = mockMode;
+  }) : _ble = ble,
+       _mockMode = mockMode;
 
   /// Scan for BLE devices
   Stream<BleDevice> scanForDevices({
@@ -41,40 +44,44 @@ class ReactiveBleDataSource {
     final controller = StreamController<BleDevice>();
     final seenDevices = <String>{};
 
-    _scanSubscription = _ble.scanForDevices(
-      withServices: [],
-      scanMode: ScanMode.lowLatency,
-      requireLocationServicesEnabled: false,
-    ).listen(
-      (device) {
-        if (seenDevices.contains(device.id)) {
-          return;
-        }
-        seenDevices.add(device.id);
+    _scanSubscription = _ble
+        .scanForDevices(
+          withServices: [],
+          scanMode: ScanMode.lowLatency,
+          requireLocationServicesEnabled: false,
+        )
+        .listen(
+          (device) {
+            if (seenDevices.contains(device.id)) {
+              return;
+            }
+            seenDevices.add(device.id);
 
-        final name = device.name.isEmpty ? 'Unknown' : device.name;
-        
-        if (filterByName != null && filterByName.isNotEmpty) {
-          if (!name.toLowerCase().contains(filterByName.toLowerCase())) {
-            return;
-          }
-        }
+            final name = device.name.isEmpty ? 'Unknown' : device.name;
 
-        final bleDevice = BleDeviceModel(
-          id: device.id,
-          name: name,
-          rssi: device.rssi,
-          isPreferred: filterByName != null && name.toLowerCase().contains(filterByName.toLowerCase()),
+            if (filterByName != null && filterByName.isNotEmpty) {
+              if (!name.toLowerCase().contains(filterByName.toLowerCase())) {
+                return;
+              }
+            }
+
+            final bleDevice = BleDeviceModel(
+              id: device.id,
+              name: name,
+              rssi: device.rssi,
+              isPreferred:
+                  filterByName != null &&
+                  name.toLowerCase().contains(filterByName.toLowerCase()),
+            );
+
+            controller.add(bleDevice);
+            AppLogger.debug('Dispositivo encontrado: $name (${device.id})');
+          },
+          onError: (error) {
+            AppLogger.error('Erro no scan BLE', error);
+            controller.addError(error);
+          },
         );
-
-        controller.add(bleDevice);
-        AppLogger.debug('Dispositivo encontrado: $name (${device.id})');
-      },
-      onError: (error) {
-        AppLogger.error('Erro no scan BLE', error);
-        controller.addError(error);
-      },
-    );
 
     // Auto-stop after scan duration
     if (scanDuration != null) {
@@ -89,20 +96,24 @@ class ReactiveBleDataSource {
   /// Mock scan for testing
   Stream<BleDevice> _mockScan({String? filterByName}) {
     final controller = StreamController<BleDevice>();
-    
+
     Timer.periodic(const Duration(seconds: 2), (timer) {
       final devices = [
         BleDeviceModel(
           id: 'mock-device-1',
           name: 'ESP32',
           rssi: -45,
-          isPreferred: filterByName == null || filterByName.toLowerCase().contains('esp32'),
+          isPreferred:
+              filterByName == null ||
+              filterByName.toLowerCase().contains('esp32'),
         ),
         BleDeviceModel(
           id: 'mock-device-2',
           name: 'Arduino',
           rssi: -60,
-          isPreferred: filterByName == null || filterByName.toLowerCase().contains('arduino'),
+          isPreferred:
+              filterByName == null ||
+              filterByName.toLowerCase().contains('arduino'),
         ),
         BleDeviceModel(
           id: 'mock-device-3',
@@ -113,7 +124,7 @@ class ReactiveBleDataSource {
       ];
 
       for (final device in devices) {
-        if (filterByName == null || 
+        if (filterByName == null ||
             filterByName.isEmpty ||
             device.name.toLowerCase().contains(filterByName.toLowerCase())) {
           controller.add(device);
@@ -152,30 +163,32 @@ class ReactiveBleDataSource {
     _connectionSubscription?.cancel();
     connectionController.add(ConnectionState.connecting);
 
-    _connectionSubscription = _ble.connectToDevice(
-      id: deviceId,
-      connectionTimeout: BleConstants.connectionTimeout,
-    ).listen(
-      (update) {
-        final state = _mapConnectionState(update.connectionState);
-        connectionController.add(state);
-        AppLogger.info('Estado de conexão: $state');
+    _connectionSubscription = _ble
+        .connectToDevice(
+          id: deviceId,
+          connectionTimeout: BleConstants.connectionTimeout,
+        )
+        .listen(
+          (update) {
+            final state = _mapConnectionState(update.connectionState);
+            connectionController.add(state);
+            AppLogger.info('Estado de conexão: $state');
 
-        if (state == ConnectionState.connected) {
-          _subscribeToNotifications(settings);
-        } else if (state == ConnectionState.disconnected) {
-          _connectedDeviceId = null;
-          _clearNotifySubscription();
-        }
-      },
-      onError: (error) {
-        AppLogger.error('Erro na conexão', error);
-        connectionController.addError(error);
-        connectionController.add(ConnectionState.disconnected);
-        _connectedDeviceId = null;
-        _clearNotifySubscription();
-      },
-    );
+            if (state == ConnectionState.connected) {
+              _subscribeToNotifications(settings);
+            } else if (state == ConnectionState.disconnected) {
+              _connectedDeviceId = null;
+              _clearNotifySubscription();
+            }
+          },
+          onError: (error) {
+            AppLogger.error('Erro na conexão', error);
+            connectionController.addError(error);
+            connectionController.add(ConnectionState.disconnected);
+            _connectedDeviceId = null;
+            _clearNotifySubscription();
+          },
+        );
 
     return connectionController.stream;
   }
@@ -224,15 +237,17 @@ class ReactiveBleDataSource {
         deviceId: _connectedDeviceId!,
       );
 
-      _notifySubscription = _ble.subscribeToCharacteristic(characteristic).listen(
-        (data) {
-          _notifyController?.add(data);
-          AppLogger.debug('Dados recebidos: ${data.length} bytes');
-        },
-        onError: (error) {
-          AppLogger.error('Erro ao receber notificações', error);
-        },
-      );
+      _notifySubscription = _ble
+          .subscribeToCharacteristic(characteristic)
+          .listen(
+            (data) {
+              _notifyController?.add(data);
+              AppLogger.debug('Dados recebidos: ${data.length} bytes');
+            },
+            onError: (error) {
+              AppLogger.error('Erro ao receber notificações', error);
+            },
+          );
     } catch (e) {
       AppLogger.error('Erro ao assinar notificações', e);
     }
@@ -321,10 +336,17 @@ class ReactiveBleDataSource {
         deviceId: _connectedDeviceId!,
       );
 
-      await _ble.writeCharacteristicWithResponse(
-        characteristic,
-        value: data,
-      );
+      for (var offset = 0; offset < data.length; offset += _writeChunkSize) {
+        final end = math.min(offset + _writeChunkSize, data.length);
+        final chunk = data.sublist(offset, end);
+        await _ble.writeCharacteristicWithResponse(
+          characteristic,
+          value: chunk,
+        );
+        if (end < data.length) {
+          await Future<void>.delayed(_writeChunkDelay);
+        }
+      }
       AppLogger.debug('Dados enviados: ${data.length} bytes');
     } catch (e) {
       AppLogger.error('Erro ao enviar dados', e);
@@ -342,7 +364,8 @@ class ReactiveBleDataSource {
       String response;
 
       if (prompt != null && prompt.options.isNotEmpty) {
-        response = '$bleQuestionAnswerHeader|${prompt.questionId}|${prompt.options.first.id}';
+        response =
+            '$bleQuestionAnswerHeader|${prompt.questionId}|${prompt.options.first.id}';
       } else {
         response = 'OK: $message';
       }
@@ -408,12 +431,10 @@ class ReactiveBleDataSource {
       return Stream<bool>.value(true);
     }
 
-    return _ble.statusStream
-        .map((status) {
-          _lastBleStatus = status;
-          return status == BleStatus.ready;
-        })
-        .distinct();
+    return _ble.statusStream.map((status) {
+      _lastBleStatus = status;
+      return status == BleStatus.ready;
+    }).distinct();
   }
 
   /// Get connected device ID
@@ -430,7 +451,8 @@ class ReactiveBleDataSource {
 
   StreamController<ConnectionState> _ensureConnectionStateController() {
     if (_connectionStateController == null) {
-      _connectionStateController = StreamController<ConnectionState>.broadcast();
+      _connectionStateController =
+          StreamController<ConnectionState>.broadcast();
       _connectionStateController!.add(ConnectionState.disconnected);
     }
     return _connectionStateController!;

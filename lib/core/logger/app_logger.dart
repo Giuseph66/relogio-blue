@@ -1,6 +1,6 @@
 /// Simple logger for the app
 class AppLogger {
-  static const String _tag = '[GeoNexo Mobile]';
+  static const String _tag = '[GeoNexo]';
   
   static void debug(String message) {
     print('$_tag [DEBUG] $message');

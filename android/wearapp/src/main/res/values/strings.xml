@@ -4,4 +4,8 @@
     <string name="notification_channel_description">Mantém o GeoNexo Watch anunciando BLE e respondendo ao protocolo do dispositivo.</string>
     <string name="notification_title">GeoNexo Watch</string>
     <string name="watch_logo_content_description">Logotipo do relógio</string>
+    <string name="question_channel_name">Perguntas</string>
+    <string name="question_channel_description">Acende a tela e exibe a pergunta recebida pelo dispositivo.</string>
+    <string name="question_notification_title">Nova pergunta recebida</string>
+    <string name="question_notification_text">Toque para responder</string>
 </resources>

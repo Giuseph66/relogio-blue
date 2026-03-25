@@ -16,8 +16,11 @@ import android.bluetooth.le.AdvertiseSettings
 import android.bluetooth.le.BluetoothLeAdvertiser
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Handler
+import android.os.Looper
 import androidx.core.content.ContextCompat
 import com.example.relogio.wearapp.model.PeripheralStatus
+import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 
@@ -53,6 +56,9 @@ class BlePeripheralController(
     private var notificationsEnabled = false
     private var running = false
     private var latestValue = "ready".toByteArray(StandardCharsets.UTF_8)
+    private val incomingWriteBuffer = ByteArrayOutputStream()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val flushIncomingWriteRunnable = Runnable { flushIncomingWriteBuffer() }
 
     private val advertiseCallback =
         object : AdvertiseCallback() {
@@ -100,6 +106,7 @@ class BlePeripheralController(
                         if (connectedDevice?.address == device.address) {
                             connectedDevice = null
                             notificationsEnabled = false
+                            clearIncomingWriteBuffer()
                             listener.onClientDisconnected()
                             listener.onNotificationsChanged(false)
                         }
@@ -146,7 +153,11 @@ class BlePeripheralController(
                     return
                 }
 
-                listener.onMessageReceived(payload.toString(StandardCharsets.UTF_8))
+                synchronized(incomingWriteBuffer) {
+                    incomingWriteBuffer.write(payload)
+                }
+                mainHandler.removeCallbacks(flushIncomingWriteRunnable)
+                mainHandler.postDelayed(flushIncomingWriteRunnable, WRITE_REASSEMBLY_DELAY_MS)
             }
 
             override fun onDescriptorReadRequest(
@@ -288,6 +299,7 @@ class BlePeripheralController(
         running = false
         connectedDevice = null
         notificationsEnabled = false
+        clearIncomingWriteBuffer()
         advertiser?.stopAdvertising(advertiseCallback)
         advertiser = null
         gattServer?.close()
@@ -336,6 +348,30 @@ class BlePeripheralController(
         advertiser?.startAdvertising(settings, advertiseData, advertiseCallback)
     }
 
+    private fun flushIncomingWriteBuffer() {
+        val payload =
+            synchronized(incomingWriteBuffer) {
+                if (incomingWriteBuffer.size() == 0) {
+                    return
+                }
+                val bytes = incomingWriteBuffer.toByteArray()
+                incomingWriteBuffer.reset()
+                bytes
+            }
+
+        val message = payload.toString(StandardCharsets.UTF_8).trim()
+        if (message.isNotEmpty()) {
+            listener.onMessageReceived(message)
+        }
+    }
+
+    private fun clearIncomingWriteBuffer() {
+        mainHandler.removeCallbacks(flushIncomingWriteRunnable)
+        synchronized(incomingWriteBuffer) {
+            incomingWriteBuffer.reset()
+        }
+    }
+
     private fun hasBluetoothPermissions(): Boolean = hasConnectPermission() && hasAdvertisePermission()
 
     private fun hasConnectPermission(): Boolean =
@@ -348,5 +384,6 @@ class BlePeripheralController(
 
     companion object {
         private const val CLIENT_CONFIG_UUID = "00002902-0000-1000-8000-00805f9b34fb"
+        private const val WRITE_REASSEMBLY_DELAY_MS = 180L
     }
 }

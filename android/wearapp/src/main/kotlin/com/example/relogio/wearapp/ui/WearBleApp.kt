@@ -23,11 +23,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.CleaningServices
-import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -269,22 +267,13 @@ private fun StatusScreen(
                 style = MaterialTheme.typography.titleSmall,
                 color = Color.White,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatusBadge(
-                    modifier = Modifier.weight(1f),
-                    title = "LED",
-                    value = if (uiState.ledEnabled) "ON" else "OFF",
-                    accent = if (uiState.ledEnabled) YellowAccent else BorderColor,
-                    icon = Icons.Default.FlashOn,
-                )
-                StatusBadge(
-                    modifier = Modifier.weight(1f),
-                    title = "Notify",
-                    value = if (uiState.notificationsEnabled) "ATIVO" else "PARADO",
-                    accent = if (uiState.notificationsEnabled) CyanAccent else BorderColor,
-                    icon = Icons.Default.NotificationsActive,
-                )
-            }
+            StatusBadge(
+                modifier = Modifier.fillMaxWidth(),
+                title = "Notify",
+                value = if (uiState.notificationsEnabled) "ATIVO" else "PARADO",
+                accent = if (uiState.notificationsEnabled) CyanAccent else BorderColor,
+                icon = Icons.Default.NotificationsActive,
+            )
             StatusBadge(
                 modifier = Modifier.fillMaxWidth(),
                 title = "Cliente",
@@ -328,53 +317,19 @@ private fun ControlsScreen(
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
-                text = "Sons & ações BLE",
+                text = "Ações BLE",
                 style = MaterialTheme.typography.titleSmall,
                 color = Color.White,
             )
-            Text(
-                text = "Mesmos comandos da tela touch do ESP32.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MutedText,
+
+            ActionTile(
+                modifier = Modifier.fillMaxWidth(),
+                label = "PING",
+                accent = CyanAccent,
+                icon = Icons.Default.Send,
+                enabled = uiState.serviceRunning,
+                onClick = { onCommand("PING", "PING") },
             )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile(
-                    modifier = Modifier.weight(1f),
-                    label = "PING",
-                    accent = CyanAccent,
-                    icon = Icons.Default.Send,
-                    enabled = uiState.serviceRunning,
-                    onClick = { onCommand("PING", "PING") },
-                )
-                ActionTile(
-                    modifier = Modifier.weight(1f),
-                    label = "LIGA",
-                    accent = GreenAccent,
-                    icon = Icons.Default.PowerSettingsNew,
-                    enabled = uiState.serviceRunning,
-                    onClick = { onCommand("LED_ON", "LED_ON") },
-                )
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile(
-                    modifier = Modifier.weight(1f),
-                    label = "DESLIGA",
-                    accent = RedAccent,
-                    icon = Icons.Default.PowerSettingsNew,
-                    enabled = uiState.serviceRunning,
-                    onClick = { onCommand("LED_OFF", "LED_OFF") },
-                )
-                ActionTile(
-                    modifier = Modifier.weight(1f),
-                    label = "LED?",
-                    accent = YellowAccent,
-                    icon = Icons.Default.HelpOutline,
-                    enabled = uiState.serviceRunning,
-                    onClick = { onCommand("LED_STATUS", "LED_STATUS") },
-                )
-            }
 
             ActionPill(
                 label = "Emular pergunta",
@@ -422,44 +377,77 @@ private fun QuestionOverlay(
     }
 
     Box(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(Color(0xD9000000))
-                .padding(12.dp),
-        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xD9000000)),
     ) {
-        Panel(
-            modifier = Modifier.fillMaxWidth(),
-            background = PanelBackground,
-            border = CyanAccent,
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+            Panel(
+                modifier = Modifier.fillMaxWidth(),
+                background = PanelBackground,
+                border = CyanAccent,
             ) {
-                Text(
-                    text = "NOVA PERGUNTA",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = CyanAccent,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                )
-                CountdownBar(progress = progress)
-                Text(
-                    text = question.question,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White,
-                    textAlign = TextAlign.Center,
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        text = "NOVA PERGUNTA",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = CyanAccent,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                    )
+                    CountdownBar(progress = progress)
+                    Text(
+                        text = question.question,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                    )
+                    QuestionOptions(options = question.options, onAnswer = onAnswer)
+                }
+            }
+        }
+    }
+}
 
-                question.options.forEachIndexed { index, option ->
+@Composable
+private fun QuestionOptions(
+    options: List<QuestionOption>,
+    onAnswer: (QuestionOption) -> Unit,
+) {
+    if (options.size <= 2) {
+        options.forEachIndexed { index, option ->
+            ActionPill(
+                label = option.label,
+                accent = questionOptionAccent(index),
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { onAnswer(option) },
+            )
+        }
+    } else {
+        // Grid 2×2 para 3–4 opções
+        options.chunked(2).forEachIndexed { rowIndex, rowOptions ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                rowOptions.forEachIndexed { colIndex, option ->
                     ActionPill(
                         label = option.label,
-                        accent = questionOptionAccent(index),
-                        modifier = Modifier.fillMaxWidth(),
+                        accent = questionOptionAccent(rowIndex * 2 + colIndex),
+                        modifier = Modifier.weight(1f),
                         onClick = { onAnswer(option) },
                     )
+                }
+                // Preenche espaço se última linha tiver opção ímpar
+                if (rowOptions.size < 2) {
+                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding;
 import '../../../../core/di/dependency_injection.dart';
 import '../../../../core/permissions/permission_helper.dart';
 import '../../../../core/ble/ble_errors.dart';
@@ -10,17 +11,20 @@ import '../../domain/repositories/ble_repository.dart';
 /// Controller for BLE operations
 class BleController {
   final DependencyInjection _di = DependencyInjection();
-  final BleForegroundServiceManager _foregroundService = BleForegroundServiceManager();
+  final BleForegroundServiceManager _foregroundService =
+      BleForegroundServiceManager();
 
   // Streams
   final _scanResultsController = StreamController<List<BleDevice>>.broadcast();
-  final _connectionStateController = StreamController<ConnectionState>.broadcast();
+  final _connectionStateController =
+      StreamController<ConnectionState>.broadcast();
   final _isScanningController = StreamController<bool>.broadcast();
   final _bluetoothEnabledController = StreamController<bool>.broadcast();
   final _permissionsGrantedController = StreamController<bool>.broadcast();
 
   Stream<List<BleDevice>> get scanResults => _scanResultsController.stream;
-  Stream<ConnectionState> get connectionState => _connectionStateController.stream;
+  Stream<ConnectionState> get connectionState =>
+      _connectionStateController.stream;
   Stream<bool> get isScanning => _isScanningController.stream;
   Stream<bool> get bluetoothEnabled => _bluetoothEnabledController.stream;
   Stream<bool> get permissionsGranted => _permissionsGrantedController.stream;
@@ -56,23 +60,25 @@ class BleController {
     final isEnabled = await _di.bleRepository.isBluetoothEnabled();
     _bluetoothEnabledController.add(isEnabled);
 
-    _bluetoothSubscription = _di.bleRepository.getBluetoothStatusStream().listen(
-      (enabled) {
-        _lastBluetoothEnabled = enabled;
-        _bluetoothEnabledController.add(enabled);
-      },
-      onError: (_) {
-        _bluetoothEnabledController.add(false);
-      },
-    );
+    _bluetoothSubscription = _di.bleRepository
+        .getBluetoothStatusStream()
+        .listen(
+          (enabled) {
+            _lastBluetoothEnabled = enabled;
+            _bluetoothEnabledController.add(enabled);
+          },
+          onError: (_) {
+            _bluetoothEnabledController.add(false);
+          },
+        );
 
     // Listen to connection state
-    _connectionSubscription = _di.bleRepository.getConnectionState().listen(
-      (state) {
-        _currentConnectionState = state;
-        _connectionStateController.add(state);
-      },
-    );
+    _connectionSubscription = _di.bleRepository.getConnectionState().listen((
+      state,
+    ) {
+      _currentConnectionState = state;
+      _connectionStateController.add(state);
+    });
 
     _startStatusTimer();
     _attemptAutoReconnectOnStart();
@@ -128,25 +134,25 @@ class BleController {
     _devices.clear();
     _scanResultsController.add(_devices);
 
-    _scanSubscription = _di.startBleScan(
-      filterByName: filterByName,
-    ).listen(
-      (device) {
-        // Avoid duplicates
-        final index = _devices.indexWhere((d) => d.id == device.id);
-        if (index >= 0) {
-          _devices[index] = device;
-        } else {
-          _devices.add(device);
-        }
-        _scanResultsController.add(List.unmodifiable(_devices));
-      },
-      onError: (error) {
-        _isScanning = false;
-        _isScanningController.add(false);
-        _scanResultsController.addError(error);
-      },
-    );
+    _scanSubscription = _di
+        .startBleScan(filterByName: filterByName)
+        .listen(
+          (device) {
+            // Avoid duplicates
+            final index = _devices.indexWhere((d) => d.id == device.id);
+            if (index >= 0) {
+              _devices[index] = device;
+            } else {
+              _devices.add(device);
+            }
+            _scanResultsController.add(List.unmodifiable(_devices));
+          },
+          onError: (error) {
+            _isScanning = false;
+            _isScanningController.add(false);
+            _scanResultsController.addError(error);
+          },
+        );
   }
 
   /// Stop scanning
@@ -215,9 +221,18 @@ class BleController {
     BleDevice device,
     BleSettings settings,
   ) async {
-    if (state == ConnectionState.connected && settings.keepBleAliveInBackground) {
+    final lifecycleState = WidgetsBinding.instance.lifecycleState;
+    final appInBackground =
+        lifecycleState == AppLifecycleState.paused ||
+        lifecycleState == AppLifecycleState.inactive ||
+        lifecycleState == AppLifecycleState.hidden;
+
+    if (state == ConnectionState.connected &&
+        settings.keepBleAliveInBackground &&
+        appInBackground) {
       final title = settings.backgroundServiceTitle ?? device.name;
-      final text = settings.backgroundServiceText ?? 'Conectado e recebendo mensagens';
+      final text =
+          settings.backgroundServiceText ?? 'Conectado e recebendo mensagens';
 
       await _foregroundService.startBleKeepAliveService(
         deviceId: device.id,
@@ -228,15 +243,14 @@ class BleController {
         keepServiceWhenAppClosed: settings.keepServiceWhenAppClosed,
         backgroundNotifyOnRx: settings.backgroundNotifyOnRx,
         backgroundNotifyFilterEnabled: settings.backgroundNotifyFilterEnabled,
-        backgroundNotifyAllowedPatterns: settings.backgroundNotifyAllowedPatterns,
+        backgroundNotifyAllowedPatterns:
+            settings.backgroundNotifyAllowedPatterns,
       );
 
       // Update notification with custom title/text if provided
-      if (settings.backgroundServiceTitle != null || settings.backgroundServiceText != null) {
-        await _foregroundService.updateNotification(
-          title: title,
-          text: text,
-        );
+      if (settings.backgroundServiceTitle != null ||
+          settings.backgroundServiceText != null) {
+        await _foregroundService.updateNotification(title: title, text: text);
       }
     }
   }
@@ -252,7 +266,8 @@ class BleController {
   }
 
   /// Get connected device ID
-  String? getConnectedDeviceId() => _connectedDeviceId ?? _di.bleRepository.getConnectedDeviceId();
+  String? getConnectedDeviceId() =>
+      _connectedDeviceId ?? _di.bleRepository.getConnectedDeviceId();
 
   /// Dispose
   void dispose() {
@@ -309,10 +324,10 @@ class BleController {
     final delaySeconds = _autoReconnectAttempt <= 1
         ? 2
         : _autoReconnectAttempt <= 2
-            ? 4
-            : _autoReconnectAttempt <= 3
-                ? 6
-                : 8;
+        ? 4
+        : _autoReconnectAttempt <= 3
+        ? 6
+        : 8;
 
     _autoReconnectTimer = Timer(Duration(seconds: delaySeconds), () async {
       if (_userInitiatedDisconnect) return;

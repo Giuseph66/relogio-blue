@@ -21,7 +21,8 @@ class MessagesController {
   }
 
   final DependencyInjection _di = DependencyInjection();
-  final BleForegroundServiceManager _foregroundService = BleForegroundServiceManager();
+  final BleForegroundServiceManager _foregroundService =
+      BleForegroundServiceManager();
   final NotificationService _notificationService = NotificationService();
   final BleMessageRelayService _messageRelay = BleMessageRelayService();
   late final LoadSettings _loadSettings;
@@ -57,10 +58,7 @@ class MessagesController {
   /// Start listening to messages
   void _startListening() {
     _di.subscribeToMessages().then((stream) {
-      _subscribeSubscription = stream.listen(
-        _onRawBleData,
-        onError: (_) {},
-      );
+      _subscribeSubscription = stream.listen(_onRawBleData, onError: (_) {});
     });
   }
 
@@ -100,7 +98,8 @@ class MessagesController {
 
     // If we have the start of a protocol message but it's still incomplete,
     // use a longer timeout to give the remaining fragment time to arrive.
-    final timeout = _rxBuffer.startsWith('QANS|') || _rxBuffer.startsWith('QERR|')
+    final timeout =
+        _rxBuffer.startsWith('QANS|') || _rxBuffer.startsWith('QERR|')
         ? _rxProtocolTimeout
         : _rxBufferTimeout;
     _rxFlushTimer = Timer(timeout, _flushRxBuffer);
@@ -144,6 +143,14 @@ class MessagesController {
       timestamp: DateTime.now(),
     );
     _addMessage(message);
+
+    final mainBleConnected = _di.bleRepository.getConnectedDeviceId() != null;
+    if (!mainBleConnected && _foregroundService.isRunning()) {
+      final forwarded = await _foregroundService.sendCommand(content);
+      if (forwarded) {
+        return true;
+      }
+    }
 
     final result = await _di.sendBleMessage(content);
     return result.isSuccess;
@@ -205,8 +212,10 @@ class MessagesController {
 
   bool _tryUpdateTickFromText(String content) {
     final normalized = _normalizeText(content);
-    final match = RegExp(r'\btick\s*:\s*(\d+)\b', caseSensitive: false)
-        .firstMatch(normalized);
+    final match = RegExp(
+      r'\btick\s*:\s*(\d+)\b',
+      caseSensitive: false,
+    ).firstMatch(normalized);
     if (match == null) {
       return false;
     }
@@ -228,7 +237,8 @@ class MessagesController {
   /// Returns true if the buffer already contains a complete QANS/QERR message
   /// (exactly 3 pipe-separated, non-empty parts).
   bool _isCompleteProtocolMessage(String buffer) {
-    if (!buffer.startsWith('QANS|') && !buffer.startsWith('QERR|')) return false;
+    if (!buffer.startsWith('QANS|') && !buffer.startsWith('QERR|'))
+      return false;
     final parts = buffer.split('|');
     return parts.length >= 3 && parts[1].isNotEmpty && parts[2].isNotEmpty;
   }
@@ -248,7 +258,8 @@ class MessagesController {
         return;
       }
 
-      final isOnline = DateTime.now().difference(lastSeen) <= const Duration(seconds: 8);
+      final isOnline =
+          DateTime.now().difference(lastSeen) <= const Duration(seconds: 8);
       if (isOnline != _lastTickStatus.online) {
         _lastTickStatus = _lastTickStatus.copyWith(online: isOnline);
         _tickStatusController.add(_lastTickStatus);
@@ -262,12 +273,13 @@ class MessagesController {
       // Load settings to check if notifications are enabled
       final settingsResult = await _loadSettings();
       final settings = settingsResult.valueOrNull;
-      
+
       if (settings == null) return;
 
       final lifecycleState =
           _appLifecycleState ?? WidgetsBinding.instance.lifecycleState;
-      final isInBackground = lifecycleState == AppLifecycleState.paused ||
+      final isInBackground =
+          lifecycleState == AppLifecycleState.paused ||
           lifecycleState == AppLifecycleState.inactive ||
           lifecycleState == AppLifecycleState.hidden;
       final shouldNotify = isInBackground || settings.backgroundNotifyOnRx;
@@ -292,7 +304,9 @@ class MessagesController {
 
       // Update foreground service notification
       if (_foregroundService.isRunning()) {
-        final preview = content.length > 50 ? '${content.substring(0, 47)}...' : content;
+        final preview = content.length > 50
+            ? '${content.substring(0, 47)}...'
+            : content;
         await _foregroundService.updateNotification(
           text: 'Última mensagem: $preview',
         );
@@ -318,17 +332,9 @@ class TickStatus {
   final DateTime? lastSeen;
   final bool online;
 
-  const TickStatus({
-    this.tickNumber,
-    this.lastSeen,
-    this.online = false,
-  });
+  const TickStatus({this.tickNumber, this.lastSeen, this.online = false});
 
-  TickStatus copyWith({
-    int? tickNumber,
-    DateTime? lastSeen,
-    bool? online,
-  }) {
+  TickStatus copyWith({int? tickNumber, DateTime? lastSeen, bool? online}) {
     return TickStatus(
       tickNumber: tickNumber ?? this.tickNumber,
       lastSeen: lastSeen ?? this.lastSeen,

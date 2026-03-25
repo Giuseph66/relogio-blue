@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
+import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -10,7 +11,6 @@ import 'package:http/http.dart' as http;
 
 import '../ble/ble_constants.dart';
 import '../ble/ble_question_protocol.dart';
-import '../config/app_config.dart';
 import '../logger/app_logger.dart';
 import '../network/ble_message_relay.dart';
 import '../notifications/message_notification_filter.dart';
@@ -27,6 +27,8 @@ const String _kBackgroundNotifyFilterEnabledKey = 'ble_notify_filter_enabled';
 const String _kBackgroundNotifyPatternsKey = 'ble_notify_patterns_json';
 
 const Duration _kHeartbeatTimeout = Duration(seconds: 3);
+const int _kBleWriteChunkSize = 20;
+const Duration _kBleWriteChunkDelay = Duration(milliseconds: 60);
 
 /// Manager for BLE Foreground Service
 /// Manages the foreground service that keeps BLE connection alive in background
@@ -141,7 +143,7 @@ class BleForegroundServiceManager {
     }
 
     try {
-      final title = deviceName ?? 'GeoNexo Mobile';
+      final title = deviceName ?? 'GeoNexo';
       final text = 'Conectado e recebendo mensagens';
       _currentNotificationTitle = title;
       _currentNotificationText = text;
@@ -195,15 +197,15 @@ class BleForegroundServiceManager {
   }
 
   /// Update the notification text
-  Future<void> updateNotification({
-    String? title,
-    String? text,
-  }) async {
+  Future<void> updateNotification({String? title, String? text}) async {
     if (!_isRunning) return;
 
     try {
       final updatedTitle =
-          title ?? _currentNotificationTitle ?? _currentDeviceName ?? 'GeoNexo Mobile';
+          title ??
+          _currentNotificationTitle ??
+          _currentDeviceName ??
+          'GeoNexo';
       final updatedText =
           text ?? _currentNotificationText ?? 'Conectado e recebendo mensagens';
       _currentNotificationTitle = updatedTitle;
@@ -226,6 +228,27 @@ class BleForegroundServiceManager {
   /// Get current device name
   String? getCurrentDeviceName() => _currentDeviceName;
 
+  Future<bool> sendCommand(String command) async {
+    final trimmed = command.trim();
+    if (!_isRunning || trimmed.isEmpty) {
+      return false;
+    }
+
+    try {
+      FlutterForegroundTask.sendDataToTask({
+        'type': 'send_command',
+        'command': trimmed,
+      });
+      return true;
+    } catch (e) {
+      AppLogger.error(
+        'Erro ao encaminhar comando para o foreground service',
+        e,
+      );
+      return false;
+    }
+  }
+
   /// Foreground task callback (runs in isolate)
   @pragma('vm:entry-point')
   static void _startCallback() {
@@ -244,7 +267,10 @@ class BleForegroundServiceManager {
     List<String> backgroundNotifyAllowedPatterns = const [],
   }) async {
     await FlutterForegroundTask.saveData(key: _kDeviceIdKey, value: deviceId);
-    await FlutterForegroundTask.saveData(key: _kServiceUuidKey, value: serviceUuid);
+    await FlutterForegroundTask.saveData(
+      key: _kServiceUuidKey,
+      value: serviceUuid,
+    );
     await FlutterForegroundTask.saveData(
       key: _kNotifyUuidKey,
       value: notifyCharacteristicUuid,
@@ -283,7 +309,9 @@ class BleForegroundServiceManager {
     await FlutterForegroundTask.removeData(key: _kServerApiUrlKey);
     await FlutterForegroundTask.removeData(key: _kKeepServiceWhenClosedKey);
     await FlutterForegroundTask.removeData(key: _kBackgroundNotifyOnRxKey);
-    await FlutterForegroundTask.removeData(key: _kBackgroundNotifyFilterEnabledKey);
+    await FlutterForegroundTask.removeData(
+      key: _kBackgroundNotifyFilterEnabledKey,
+    );
     await FlutterForegroundTask.removeData(key: _kBackgroundNotifyPatternsKey);
   }
 
@@ -372,7 +400,9 @@ class BleForegroundTaskHandler extends TaskHandler {
 
   @override
   void onRepeatEvent(DateTime timestamp) {
-    AppLogger.debug('FG tick | appAlive=${_isAppAlive()} connected=$_isConnected');
+    AppLogger.debug(
+      'FG tick | appAlive=${_isAppAlive()} connected=$_isConnected',
+    );
     _maybeMaintainConnection();
 
     // When main isolate is paused, poll GPS here so geofence detection continues.
@@ -409,15 +439,17 @@ class BleForegroundTaskHandler extends TaskHandler {
         final deviceName = data['deviceName'] as String?;
         final serverApiUrl = data['serverApiUrl'] as String?;
         final keepWhenClosed = data['keepWhenClosed'] as bool? ?? true;
-        final backgroundNotifyOnRx = data['backgroundNotifyOnRx'] as bool? ?? true;
+        final backgroundNotifyOnRx =
+            data['backgroundNotifyOnRx'] as bool? ?? true;
         final backgroundNotifyFilterEnabled =
             data['backgroundNotifyFilterEnabled'] as bool? ?? false;
         final backgroundNotifyAllowedPatterns =
             (data['backgroundNotifyAllowedPatterns'] as List<dynamic>?)
-                    ?.map((value) => value.toString())
-                    .toList() ??
-                const <String>[];
-        final shouldReconnect = _deviceId != deviceId ||
+                ?.map((value) => value.toString())
+                .toList() ??
+            const <String>[];
+        final shouldReconnect =
+            _deviceId != deviceId ||
             _serviceUuid != serviceUuid ||
             _notifyUuid != notifyUuid;
 
@@ -438,6 +470,12 @@ class BleForegroundTaskHandler extends TaskHandler {
           _scheduleReconnect(reset: true);
         }
         _maybeMaintainConnection();
+        return;
+      }
+      if (type == 'send_command') {
+        final command = (data['command'] as String?)?.trim() ?? '';
+        if (command.isEmpty) return;
+        unawaited(_sendBleCommand(command));
       }
     }
   }
@@ -454,21 +492,30 @@ class BleForegroundTaskHandler extends TaskHandler {
 
   Future<void> _loadConfigFromStorage() async {
     _deviceId = await FlutterForegroundTask.getData<String>(key: _kDeviceIdKey);
-    _deviceName =
-        await FlutterForegroundTask.getData<String>(key: _kDeviceNameKey);
-    _serviceUuid =
-        await FlutterForegroundTask.getData<String>(key: _kServiceUuidKey);
-    _notifyUuid =
-        await FlutterForegroundTask.getData<String>(key: _kNotifyUuidKey);
-    _serverApiUrl =
-        await FlutterForegroundTask.getData<String>(key: _kServerApiUrlKey);
+    _deviceName = await FlutterForegroundTask.getData<String>(
+      key: _kDeviceNameKey,
+    );
+    _serviceUuid = await FlutterForegroundTask.getData<String>(
+      key: _kServiceUuidKey,
+    );
+    _notifyUuid = await FlutterForegroundTask.getData<String>(
+      key: _kNotifyUuidKey,
+    );
+    _serverApiUrl = await FlutterForegroundTask.getData<String>(
+      key: _kServerApiUrlKey,
+    );
     _keepServiceWhenClosed =
-        await FlutterForegroundTask.getData<bool>(key: _kKeepServiceWhenClosedKey) ??
-            true;
+        await FlutterForegroundTask.getData<bool>(
+          key: _kKeepServiceWhenClosedKey,
+        ) ??
+        true;
     _backgroundNotifyOnRx =
-        await FlutterForegroundTask.getData<bool>(key: _kBackgroundNotifyOnRxKey) ??
-            true;
-    _backgroundNotifyFilterEnabled = await FlutterForegroundTask.getData<bool>(
+        await FlutterForegroundTask.getData<bool>(
+          key: _kBackgroundNotifyOnRxKey,
+        ) ??
+        true;
+    _backgroundNotifyFilterEnabled =
+        await FlutterForegroundTask.getData<bool>(
           key: _kBackgroundNotifyFilterEnabledKey,
         ) ??
         false;
@@ -525,29 +572,30 @@ class BleForegroundTaskHandler extends TaskHandler {
           connectionTimeout: BleConstants.connectionTimeout,
         )
         .listen(
-      (update) {
-        if (update.connectionState == DeviceConnectionState.connected) {
-          _isConnected = true;
-          _isConnecting = false;
-          _reconnectAttempt = 0;
-          _nextConnectAt = null;
-          _subscribeToNotifications();
-          _updateStatusNotification('Conectado em segundo plano');
-          AppLogger.info('FG connected');
-        } else if (update.connectionState == DeviceConnectionState.disconnected) {
-          _isConnected = false;
-          _isConnecting = false;
-          _scheduleReconnect();
-          AppLogger.info('FG disconnected');
-        }
-      },
-      onError: (error) {
-        _isConnected = false;
-        _isConnecting = false;
-        _scheduleReconnect();
-        AppLogger.warning('FG connect error: $error');
-      },
-    );
+          (update) {
+            if (update.connectionState == DeviceConnectionState.connected) {
+              _isConnected = true;
+              _isConnecting = false;
+              _reconnectAttempt = 0;
+              _nextConnectAt = null;
+              _subscribeToNotifications();
+              _updateStatusNotification('Conectado em segundo plano');
+              AppLogger.info('FG connected');
+            } else if (update.connectionState ==
+                DeviceConnectionState.disconnected) {
+              _isConnected = false;
+              _isConnecting = false;
+              _scheduleReconnect();
+              AppLogger.info('FG disconnected');
+            }
+          },
+          onError: (error) {
+            _isConnected = false;
+            _isConnecting = false;
+            _scheduleReconnect();
+            AppLogger.warning('FG connect error: $error');
+          },
+        );
   }
 
   void _subscribeToNotifications() {
@@ -563,16 +611,18 @@ class BleForegroundTaskHandler extends TaskHandler {
       deviceId: deviceId,
     );
 
-    _notifySubscription = _ble.subscribeToCharacteristic(characteristic).listen(
-      (data) {
-        if (data.isEmpty) return;
-        final content = _decodeMessage(data);
-        _handleIncomingMessage(content);
-      },
-      onError: (error) {
-        AppLogger.warning('Erro ao receber notificacao BLE: $error');
-      },
-    );
+    _notifySubscription = _ble
+        .subscribeToCharacteristic(characteristic)
+        .listen(
+          (data) {
+            if (data.isEmpty) return;
+            final content = _decodeMessage(data);
+            _handleIncomingMessage(content);
+          },
+          onError: (error) {
+            AppLogger.warning('Erro ao receber notificacao BLE: $error');
+          },
+        );
     AppLogger.info('FG subscribed to notify');
   }
 
@@ -582,20 +632,24 @@ class BleForegroundTaskHandler extends TaskHandler {
     }
 
     AppLogger.debug('FG RX: $content');
-    final preview = content.length > 50 ? '${content.substring(0, 47)}...' : content;
+    final preview = content.length > 50
+        ? '${content.substring(0, 47)}...'
+        : content;
     FlutterForegroundTask.updateService(
-      notificationTitle: _deviceName ?? 'GeoNexo Mobile',
+      notificationTitle: _deviceName ?? 'GeoNexo',
       notificationText: 'Ultima mensagem: $preview',
     );
 
     final serverUrl = _serverApiUrl?.trim() ?? '';
     if (serverUrl.isNotEmpty) {
-      unawaited(_relay.sendRxMessage(
-        baseUrl: serverUrl,
-        content: content,
-        deviceId: _deviceId,
-        deviceName: _deviceName,
-      ));
+      unawaited(
+        _relay.sendRxMessage(
+          baseUrl: serverUrl,
+          content: content,
+          deviceId: _deviceId,
+          deviceName: _deviceName,
+        ),
+      );
     }
 
     final shouldNotify = MessageNotificationFilter.shouldNotify(
@@ -613,7 +667,9 @@ class BleForegroundTaskHandler extends TaskHandler {
     try {
       return utf8.decode(data);
     } catch (_) {
-      final hex = data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
+      final hex = data
+          .map((b) => b.toRadixString(16).padLeft(2, '0'))
+          .join(' ');
       return 'HEX: $hex';
     }
   }
@@ -655,20 +711,23 @@ class BleForegroundTaskHandler extends TaskHandler {
       );
 
       final uri = Uri.parse('$serverUrl/api/location/resolve');
-      final resp = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'deviceId': 'mobile-app',
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-        }),
-      ).timeout(const Duration(seconds: 5));
+      final resp = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'deviceId': 'mobile-app',
+              'latitude': position.latitude,
+              'longitude': position.longitude,
+            }),
+          )
+          .timeout(const Duration(seconds: 5));
 
       if (resp.statusCode != 200) return;
 
       final body = jsonDecode(resp.body) as Map<String, dynamic>;
-      final questions = (body['questions'] as List?)
+      final questions =
+          (body['questions'] as List?)
               ?.whereType<Map<String, dynamic>>()
               .toList() ??
           [];
@@ -687,9 +746,8 @@ class BleForegroundTaskHandler extends TaskHandler {
         return;
       }
 
-      final rawOptions = (q['options'] as List?)
-              ?.whereType<Map<String, dynamic>>()
-              .toList() ??
+      final rawOptions =
+          (q['options'] as List?)?.whereType<Map<String, dynamic>>().toList() ??
           [];
       if (rawOptions.length < bleQuestionMinOptions) return;
 
@@ -697,10 +755,12 @@ class BleForegroundTaskHandler extends TaskHandler {
         questionId: questionId,
         question: q['prompt'] as String? ?? '',
         options: rawOptions
-            .map((o) => BleQuestionOption(
-                  id: o['id'] as String? ?? '',
-                  label: o['label'] as String? ?? '',
-                ))
+            .map(
+              (o) => BleQuestionOption(
+                id: o['id'] as String? ?? '',
+                label: o['label'] as String? ?? '',
+              ),
+            )
             .toList(),
       );
 
@@ -717,7 +777,9 @@ class BleForegroundTaskHandler extends TaskHandler {
       _lastSentQuestionId = questionId;
       _lastSentQuestionAt = DateTime.now();
 
-      AppLogger.info('FG geofence: question sent – ${q['locationName'] ?? questionId}');
+      AppLogger.info(
+        'FG geofence: question sent – ${q['locationName'] ?? questionId}',
+      );
       _updateStatusNotification('Pergunta enviada ao relógio');
 
       // Notify main isolate so it saves the record to DB when it wakes up.
@@ -739,7 +801,13 @@ class BleForegroundTaskHandler extends TaskHandler {
     final deviceId = _deviceId;
     final serviceUuid = _serviceUuid;
     final notifyUuid = _notifyUuid;
-    if (deviceId == null || serviceUuid == null || notifyUuid == null) return;
+    if (deviceId == null ||
+        serviceUuid == null ||
+        notifyUuid == null ||
+        !_isConnected) {
+      AppLogger.warning('FG BLE send skipped: sem conexão ativa');
+      return;
+    }
 
     // The write characteristic is the same as notify for HM-10 style modules.
     final characteristic = QualifiedCharacteristic(
@@ -748,9 +816,23 @@ class BleForegroundTaskHandler extends TaskHandler {
       deviceId: deviceId,
     );
 
-    final bytes = command.codeUnits;
+    final bytes = utf8.encode(command);
     try {
-      await _ble.writeCharacteristicWithoutResponse(characteristic, value: bytes);
+      for (
+        var offset = 0;
+        offset < bytes.length;
+        offset += _kBleWriteChunkSize
+      ) {
+        final end = math.min(offset + _kBleWriteChunkSize, bytes.length);
+        final chunk = bytes.sublist(offset, end);
+        await _ble.writeCharacteristicWithoutResponse(
+          characteristic,
+          value: chunk,
+        );
+        if (end < bytes.length) {
+          await Future<void>.delayed(_kBleWriteChunkDelay);
+        }
+      }
       AppLogger.debug('FG BLE sent: ${bytes.length} bytes');
     } catch (e) {
       AppLogger.warning('FG BLE send error: $e');
@@ -785,10 +867,10 @@ class BleForegroundTaskHandler extends TaskHandler {
     final delaySeconds = _reconnectAttempt <= 1
         ? 2
         : _reconnectAttempt == 2
-            ? 4
-            : _reconnectAttempt == 3
-                ? 6
-                : 8;
+        ? 4
+        : _reconnectAttempt == 3
+        ? 6
+        : 8;
 
     _nextConnectAt = DateTime.now().add(Duration(seconds: delaySeconds));
     _isConnected = false;
@@ -798,11 +880,10 @@ class BleForegroundTaskHandler extends TaskHandler {
 
   void _updateStatusNotification(String text) {
     FlutterForegroundTask.updateService(
-      notificationTitle: _deviceName ?? 'GeoNexo Mobile',
+      notificationTitle: _deviceName ?? 'GeoNexo',
       notificationText: text,
     );
   }
-
 }
 
 /// Foreground task entrypoint (top-level).
