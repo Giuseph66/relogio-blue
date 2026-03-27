@@ -52,6 +52,15 @@ const List<_QuickQuestionPreset> _questionPresets = [
       BleQuestionOption(id: 'a1', label: 'Alta'),
     ],
   ),
+  _QuickQuestionPreset(
+    label: 'Cantina',
+    question: 'Oque voce achou da nova cantina ?',
+    options: [
+      BleQuestionOption(id: 'boa', label: 'Boa'),
+      BleQuestionOption(id: 'ruim', label: 'Ruim'),
+      BleQuestionOption(id: 'antes', label: 'antes era melhor'),
+    ],
+  ),
 ];
 
 class _ModernMessagesPageState extends State<ModernMessagesPage> {
@@ -99,7 +108,8 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isConnected = _connectionState == ble.ConnectionState.connected ||
+    final isConnected =
+        _connectionState == ble.ConnectionState.connected ||
         _messagesController.isWatchConnected;
 
     return Scaffold(
@@ -117,7 +127,8 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: TextButton.icon(
-                  onPressed: () => Navigator.pushNamed(context, AppRoutes.connect),
+                  onPressed: () =>
+                      Navigator.pushNamed(context, AppRoutes.connect),
                   icon: const Icon(Icons.bluetooth_searching, size: 18),
                   label: const Text('Conectar dispositivo'),
                 ),
@@ -138,7 +149,7 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
       builder: (context, snapshot) {
         final status = snapshot.data ?? const TickStatus();
         final isOnline = status.online;
-        
+
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -186,7 +197,10 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
         color: Colors.white10,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(text, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+      child: Text(
+        text,
+        style: const TextStyle(color: Colors.white54, fontSize: 10),
+      ),
     );
   }
 
@@ -208,7 +222,12 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
         }
 
         if (messages.isEmpty) {
-          return const Center(child: Text('Nenhum log disponível', style: TextStyle(color: Colors.white24)));
+          return const Center(
+            child: Text(
+              'Nenhum log disponível',
+              style: TextStyle(color: Colors.white24),
+            ),
+          );
         }
 
         _scrollToBottom();
@@ -226,14 +245,19 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
     );
   }
 
-  Widget _buildChatBubble(BleMessage message, Map<String, BleQuestionPrompt> questionIndex) {
+  Widget _buildChatBubble(
+    BleMessage message,
+    Map<String, BleQuestionPrompt> questionIndex,
+  ) {
     final bool isRx = message.isReceived;
     final parsedQuestion = tryParseBleQuestionCommand(message.content);
     final parsedResult = tryParseBleQuestionResult(message.content);
     return Align(
       alignment: isRx ? Alignment.centerLeft : Alignment.centerRight,
       child: Container(
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
+        ),
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
@@ -247,7 +271,9 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
             bottomRight: Radius.circular(isRx ? 20 : 4),
           ),
           border: Border.all(
-            color: isRx ? Colors.white10 : Colors.cyanAccent.withValues(alpha: 0.3),
+            color: isRx
+                ? Colors.white10
+                : Colors.cyanAccent.withValues(alpha: 0.3),
           ),
         ),
         child: Column(
@@ -306,20 +332,25 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
         Wrap(
           spacing: 6,
           runSpacing: 6,
-          children: prompt.options.map((option) {
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-              decoration: BoxDecoration(
-                color: Colors.white10,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: Colors.white12),
-              ),
-              child: Text(
-                '${option.id}: ${option.label}',
-                style: const TextStyle(color: Colors.white70, fontSize: 11),
-              ),
-            );
-          }).toList(growable: false),
+          children: prompt.options
+              .map((option) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white10,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: Text(
+                    '${option.id}: ${option.label}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  ),
+                );
+              })
+              .toList(growable: false),
         ),
       ],
     );
@@ -401,11 +432,18 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
                 return ActionChip(
                   label: Text(
                     commands[index],
-                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   backgroundColor: Colors.white10,
-                  labelStyle: TextStyle(color: isConnected ? Colors.white70 : Colors.white30),
-                  onPressed: isConnected ? () => _sendMessage(commands[index]) : null,
+                  labelStyle: TextStyle(
+                    color: isConnected ? Colors.white70 : Colors.white30,
+                  ),
+                  onPressed: isConnected
+                      ? () => _sendMessage(commands[index])
+                      : null,
                 );
               },
             ),
@@ -421,12 +459,22 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
               itemBuilder: (context, index) {
                 if (index == _questionPresets.length) {
                   return ActionChip(
-                    avatar: const Icon(Icons.quiz_outlined, size: 16, color: Colors.black),
+                    avatar: const Icon(
+                      Icons.quiz_outlined,
+                      size: 16,
+                      color: Colors.black,
+                    ),
                     label: const Text(
                       'Nova pergunta',
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
                     ),
-                    backgroundColor: isConnected ? Colors.cyanAccent : Colors.white12,
+                    backgroundColor: isConnected
+                        ? Colors.cyanAccent
+                        : Colors.white12,
                     onPressed: isConnected ? _showQuestionComposer : null,
                   );
                 }
@@ -435,11 +483,18 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
                 return ActionChip(
                   label: Text(
                     preset.label,
-                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   backgroundColor: Colors.orange.withValues(alpha: 0.18),
-                  labelStyle: TextStyle(color: isConnected ? Colors.orangeAccent : Colors.white30),
-                  onPressed: isConnected ? () => _sendQuestionPreset(preset) : null,
+                  labelStyle: TextStyle(
+                    color: isConnected ? Colors.orangeAccent : Colors.white30,
+                  ),
+                  onPressed: isConnected
+                      ? () => _sendQuestionPreset(preset)
+                      : null,
                 );
               },
             ),
@@ -469,7 +524,10 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
                   borderRadius: BorderRadius.circular(20),
                   borderSide: BorderSide.none,
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
               ),
             ),
           ),
@@ -511,13 +569,16 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
   }
 
   Future<void> _sendMessage([String? text]) async {
-    final canSend = _connectionState == ble.ConnectionState.connected ||
+    final canSend =
+        _connectionState == ble.ConnectionState.connected ||
         _messagesController.isWatchConnected;
     if (!canSend) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Dispositivo desconectado. Conecte antes de enviar comandos.'),
+          content: Text(
+            'Dispositivo desconectado. Conecte antes de enviar comandos.',
+          ),
           backgroundColor: Colors.orange,
         ),
       );
@@ -555,7 +616,9 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Pergunta muito grande para o BLE. Reduza texto e alternativas.'),
+          content: Text(
+            'Pergunta muito grande para o BLE. Reduza texto e alternativas.',
+          ),
           backgroundColor: Colors.orange,
         ),
       );
@@ -566,13 +629,16 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
   }
 
   Future<void> _showQuestionComposer() async {
-    final canSend = _connectionState == ble.ConnectionState.connected ||
+    final canSend =
+        _connectionState == ble.ConnectionState.connected ||
         _messagesController.isWatchConnected;
     if (!canSend) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Conecte o dispositivo antes de abrir a pergunta estruturada.'),
+          content: Text(
+            'Conecte o dispositivo antes de abrir a pergunta estruturada.',
+          ),
           backgroundColor: Colors.orange,
         ),
       );
@@ -580,8 +646,14 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
     }
 
     final questionController = TextEditingController();
-    final optionLabelControllers = List.generate(4, (_) => TextEditingController());
-    final optionIdControllers = List.generate(4, (_) => TextEditingController());
+    final optionLabelControllers = List.generate(
+      4,
+      (_) => TextEditingController(),
+    );
+    final optionIdControllers = List.generate(
+      4,
+      (_) => TextEditingController(),
+    );
     String? errorText;
 
     try {
@@ -592,7 +664,10 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
             builder: (context, setDialogState) {
               return AlertDialog(
                 backgroundColor: const Color(0xFF161A22),
-                title: const Text('Nova pergunta BLE', style: TextStyle(color: Colors.white)),
+                title: const Text(
+                  'Nova pergunta BLE',
+                  style: TextStyle(color: Colors.white),
+                ),
                 content: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -616,7 +691,9 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
                                 style: const TextStyle(color: Colors.white),
                                 decoration: InputDecoration(
                                   labelText: 'Opcao ${i + 1}',
-                                  labelStyle: const TextStyle(color: Colors.white70),
+                                  labelStyle: const TextStyle(
+                                    color: Colors.white70,
+                                  ),
                                 ),
                               ),
                             ),
@@ -640,7 +717,10 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
                           alignment: Alignment.centerLeft,
                           child: Text(
                             errorText!,
-                            style: const TextStyle(color: Colors.orangeAccent, fontSize: 12),
+                            style: const TextStyle(
+                              color: Colors.orangeAccent,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
                     ],
@@ -670,7 +750,10 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
                         final rawId = optionIdControllers[i].text.trim().isEmpty
                             ? _autoOptionId(label, i)
                             : optionIdControllers[i].text;
-                        final id = sanitizeBleQuestionText(rawId, maxLength: 16).toLowerCase();
+                        final id = sanitizeBleQuestionText(
+                          rawId,
+                          maxLength: 16,
+                        ).toLowerCase();
                         options.add(BleQuestionOption(id: id, label: label));
                       }
 
@@ -679,19 +762,25 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
                         return;
                       }
                       if (options.length < bleQuestionMinOptions) {
-                        setDialogState(() => errorText = 'Informe pelo menos duas alternativas.');
+                        setDialogState(
+                          () => errorText =
+                              'Informe pelo menos duas alternativas.',
+                        );
                         return;
                       }
 
                       final prompt = BleQuestionPrompt(
                         questionId: _nextQuestionId(),
                         question: question,
-                        options: options.take(bleQuestionMaxOptions).toList(growable: false),
+                        options: options
+                            .take(bleQuestionMaxOptions)
+                            .toList(growable: false),
                       );
                       final payload = buildBleQuestionCommand(prompt);
                       if (payload.length > bleQuestionMaxPayloadLength) {
                         setDialogState(() {
-                          errorText = 'Pergunta muito grande para o BLE. Reduza texto/opcoes.';
+                          errorText =
+                              'Pergunta muito grande para o BLE. Reduza texto/opcoes.';
                         });
                         return;
                       }
