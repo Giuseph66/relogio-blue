@@ -55,11 +55,11 @@
             android:value="2" />
         
         <!-- Google Maps API Key -->
-        <!-- Replace YOUR_KEY_HERE with your actual Google Maps API key -->
+        <!-- Value injected from android/secrets.properties (gitignored) -->
         <!-- See README_maps.md for instructions on how to obtain the key -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="REDACTED_GOOGLE_MAPS_API_KEY"/>
+            android:value="${MAPS_API_KEY}"/>
         
         <!-- Foreground Service for BLE Background -->
         <service

@@ -51,6 +51,7 @@ app.*.map.json
 /server/data/*.sqlite
 .claude/
 
-android/
-
 .vscode/
+
+# Local secrets (API keys) - never commit
+/android/secrets.properties
