@@ -49,3 +49,8 @@ app.*.map.json
 # Local server data
 /server/data/*.db
 /server/data/*.sqlite
+.claude/
+
+android/
+
+.vscode/
