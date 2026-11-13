@@ -96,6 +96,19 @@ Recomendamos substituir o conteúdo do arquivo de setup da biblioteca pelo conte
 5.  Uma vez conectado, o ícone de status no relógio ficará verde ("OK").
 6.  Use as abas do app para enviar mensagens ou comandos para o relógio.
 
+### 🗺️ Mapa (OpenStreetMap)
+
+O app usa [`flutter_map`](https://pub.dev/packages/flutter_map) em vez do Google Maps — **não precisa de API key, conta Google nem faturamento**. Componente compartilhado em `lib/core/widgets/app_map.dart`.
+
+*   **Tiles:** servidor oficial do OpenStreetMap (`tile.openstreetmap.org`), escurecido no app com `darkModeTileBuilder` para combinar com o tema. Precisa de internet para carregar.
+    *   ⚠️ Não usar CARTO (`basemaps.cartocdn.com`): passou a exigir API key e devolve tiles com a marca "API KEY REQUIRED".
+*   **Atribuição obrigatória:** o crédito `© OpenStreetMap contributors` deve ficar visível no mapa (licença do OSM). Não remover `AppMap.attribution()`.
+*   **Identificação:** `userAgentPackageName` (`com.example.relogio`) identifica o app no servidor de tiles, como exige a política do OSM. Atualizar se o `applicationId` mudar.
+*   **Marcadores:**
+    *   🔵 ponto ciano: "você está aqui" (substitui o ponto azul do Google);
+    *   🟠 alfinete laranja + círculo: locais cadastrados e o raio do geofence;
+    *   🟢 alfinete verde: ponto escolhido ao tocar no mapa (modo seleção).
+
 ---
 
 ## 🐛 Solução de Problemas Comuns

@@ -107,7 +107,7 @@ class MessagesController {
 
   /// Flushes the reassembly buffer as a single complete message.
   void _flushRxBuffer() {
-    // Remove null bytes and other control chars that ESP32 uses to pad
+    // Remove null bytes and other control chars that the watch firmware uses to pad
     // BLE notifications to the full 20-byte ATT payload.
     final assembled = _rxBuffer
         .replaceAll('\x00', '')

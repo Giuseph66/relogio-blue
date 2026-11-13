@@ -11,10 +11,15 @@ import 'package:http/http.dart' as http;
 
 import '../ble/ble_constants.dart';
 import '../ble/ble_question_protocol.dart';
+import '../config/app_config.dart';
 import '../logger/app_logger.dart';
 import '../network/ble_message_relay.dart';
 import '../notifications/message_notification_filter.dart';
 import '../notifications/notification_service.dart';
+import '../notifications/question_notification_service.dart';
+import '../offline/offline_question_cache.dart';
+import '../../features/history/data/repositories/watch_response_repository.dart';
+import '../../features/location_tracker/domain/entities/location_question.dart';
 
 const String _kDeviceIdKey = 'ble_device_id';
 const String _kDeviceNameKey = 'ble_device_name';
@@ -67,7 +72,9 @@ class BleForegroundServiceManager {
           eventAction: ForegroundTaskEventAction.repeat(1000),
           allowWakeLock: true,
           allowWifiLock: true,
-          autoRunOnBoot: false,
+          // Come back after reboot / app update without opening the app.
+          autoRunOnBoot: true,
+          autoRunOnMyPackageReplaced: true,
         ),
       );
       FlutterForegroundTask.initCommunicationPort();
@@ -75,6 +82,37 @@ class BleForegroundServiceManager {
       AppLogger.info('BleForegroundServiceManager inicializado');
     } catch (e) {
       AppLogger.error('Erro ao inicializar BleForegroundServiceManager', e);
+    }
+  }
+
+  /// Starts the background service even without a watch: it keeps geofence
+  /// detection, phone notifications, offline cache and answer sync alive when
+  /// the app is closed. Safe to call repeatedly (e.g. on every app start).
+  Future<bool> ensureRunning() async {
+    if (!_initialized) await init();
+    _startHeartbeat();
+
+    try {
+      if (await FlutterForegroundTask.isRunningService) return true;
+
+      final hasDevice =
+          (await FlutterForegroundTask.getData<String>(key: _kDeviceIdKey))
+                  ?.isNotEmpty ==
+              true;
+      _currentNotificationTitle = 'GeoNexo';
+      _currentNotificationText =
+          hasDevice ? 'Reconectando ao relógio...' : 'Monitorando locais';
+
+      await FlutterForegroundTask.startService(
+        notificationTitle: _currentNotificationTitle!,
+        notificationText: _currentNotificationText!,
+        callback: bleForegroundTaskStartCallback,
+      );
+      AppLogger.info('Foreground service iniciado (monitoramento de locais)');
+      return true;
+    } catch (e) {
+      AppLogger.error('Erro ao garantir foreground service', e);
+      return false;
     }
   }
 
@@ -177,20 +215,20 @@ class BleForegroundServiceManager {
     }
   }
 
-  /// Stop the foreground service
+  /// Stops keeping the watch connected in background. The service itself
+  /// keeps running for geofence + notifications (see [ensureRunning]).
   Future<void> stopBleKeepAliveService() async {
     if (!_isRunning) return;
 
     try {
-      await FlutterForegroundTask.stopService();
+      await _clearConfig();
+      FlutterForegroundTask.sendDataToTask({'type': 'detach_device'});
       _isRunning = false;
       _currentDeviceId = null;
       _currentDeviceName = null;
-      _currentNotificationTitle = null;
-      _currentNotificationText = null;
-      _stopHeartbeat();
-      await _clearConfig();
-      AppLogger.info('Foreground service parado');
+      _currentNotificationTitle = 'GeoNexo';
+      _currentNotificationText = 'Monitorando locais';
+      AppLogger.info('BLE keep-alive desligado (monitoramento continua)');
     } catch (e) {
       AppLogger.error('Erro ao parar foreground service', e);
     }
@@ -347,11 +385,6 @@ class BleForegroundServiceManager {
       FlutterForegroundTask.sendDataToTask({'type': 'heartbeat'});
     });
   }
-
-  void _stopHeartbeat() {
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = null;
-  }
 }
 
 /// Task handler for the foreground service
@@ -380,12 +413,22 @@ class BleForegroundTaskHandler extends TaskHandler {
   DateTime? _lastHeartbeatAt;
 
   // ── Background geofence polling ──────────────────────────────────────────
+  final WatchResponseRepository _responses = WatchResponseRepository();
+  final OfflineQuestionCache _offlineCache = OfflineQuestionCache();
   int _locationTickCounter = 0;
-  DateTime? _lastGeofenceCheckAt;
-  String? _lastSentQuestionId;
-  DateTime? _lastSentQuestionAt;
+  int _maintenanceTickCounter = 0;
+  bool _geofenceBusy = false;
+
+  /// Locations the device is currently inside: a question fires only on
+  /// entering (not again while staying there).
+  Set<String>? _insideLocationIds;
   static const int _locationTickInterval = 10; // ticks before GPS check (~10s)
-  static const Duration _questionCooldown = Duration(minutes: 3);
+  static const int _maintenanceTickInterval = 120; // ~2 min
+  static const Duration _cacheMaxAge = Duration(minutes: 15);
+
+  /// Don't re-ask a question that was already asked recently (e.g. right
+  /// after the app was closed while inside the location).
+  static const Duration _questionDedupWindow = Duration(minutes: 30);
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
@@ -393,8 +436,12 @@ class BleForegroundTaskHandler extends TaskHandler {
     await _notificationService.init();
     _lastHeartbeatAt = DateTime.now();
     AppLogger.info(
-      'FG task start | device=$_deviceId keepClosed=$_keepServiceWhenClosed',
+      'FG task start | device=$_deviceId keepClosed=$_keepServiceWhenClosed starter=$starter',
     );
+    unawaited(_offlineCache.refreshIfStale(_cacheMaxAge));
+    if (_deviceId == null || _deviceId!.isEmpty) {
+      _updateStatusNotification('Monitorando locais');
+    }
     await _maybeMaintainConnection();
   }
 
@@ -414,6 +461,25 @@ class BleForegroundTaskHandler extends TaskHandler {
       }
     } else {
       _locationTickCounter = 0;
+      // The app owns the geofence while alive; forget our in/out state so we
+      // re-evaluate from scratch (with DB dedup) when it closes again.
+      _insideLocationIds = null;
+    }
+
+    _maintenanceTickCounter++;
+    if (_maintenanceTickCounter >= _maintenanceTickInterval) {
+      _maintenanceTickCounter = 0;
+      if (!_isAppAlive()) unawaited(_runMaintenance());
+    }
+  }
+
+  /// Offline answers → server, and keep the offline bundle fresh.
+  Future<void> _runMaintenance() async {
+    try {
+      await _responses.syncPending(AppConfig.serverApiUrl);
+      await _offlineCache.refreshIfStale(_cacheMaxAge);
+    } catch (e) {
+      AppLogger.debug('FG maintenance error: $e');
     }
   }
 
@@ -470,6 +536,15 @@ class BleForegroundTaskHandler extends TaskHandler {
           _scheduleReconnect(reset: true);
         }
         _maybeMaintainConnection();
+        return;
+      }
+      if (type == 'detach_device') {
+        _deviceId = null;
+        _serviceUuid = null;
+        _notifyUuid = null;
+        _deviceName = null;
+        unawaited(_disconnect());
+        _updateStatusNotification('Monitorando locais');
         return;
       }
       if (type == 'send_command') {
@@ -631,6 +706,24 @@ class BleForegroundTaskHandler extends TaskHandler {
       return;
     }
 
+    // Watch answered → remove the quick-reply notification from the phone.
+    final questionResult = tryParseBleQuestionResult(content);
+    if (questionResult != null && questionResult.isAnswer) {
+      unawaited(
+        QuestionNotificationService().cancelQuestion(questionResult.questionId),
+      );
+      // The UI isolate handles QANS while alive; here only when it is gone.
+      if (!_isAppAlive()) {
+        unawaited(
+          _responses.markAnsweredByQuestionId(
+            questionId: questionResult.questionId,
+            answerId: questionResult.answerId!,
+            serverUrl: AppConfig.serverApiUrl,
+          ),
+        );
+      }
+    }
+
     AppLogger.debug('FG RX: $content');
     final preview = content.length > 50
         ? '${content.substring(0, 47)}...'
@@ -696,108 +789,170 @@ class BleForegroundTaskHandler extends TaskHandler {
   // ── Background geofence ──────────────────────────────────────────────────
 
   Future<void> _checkGeofenceBackground() async {
-    final serverUrl = _serverApiUrl?.trim() ?? '';
-    if (serverUrl.isEmpty) return;
-
+    if (_geofenceBusy) return;
+    _geofenceBusy = true;
     try {
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 5),
+        timeLimit: const Duration(seconds: 10),
       );
-
-      _lastGeofenceCheckAt = DateTime.now();
+      final lat = position.latitude;
+      final lng = position.longitude;
       AppLogger.debug(
-        'FG geofence: pos=${position.latitude.toStringAsFixed(5)},${position.longitude.toStringAsFixed(5)}',
+        'FG geofence: pos=${lat.toStringAsFixed(5)},${lng.toStringAsFixed(5)}',
       );
 
-      final uri = Uri.parse('$serverUrl/api/location/resolve');
-      final resp = await http
-          .post(
-            uri,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'deviceId': 'mobile-app',
-              'latitude': position.latitude,
-              'longitude': position.longitude,
-            }),
-          )
-          .timeout(const Duration(seconds: 5));
+      // Which locations contain us? Server first, offline cache as fallback.
+      final online = await _resolveOnline(lat, lng);
+      final List<({String id, String name})> inside;
+      if (online != null) {
+        inside = online.locations;
+      } else {
+        inside = (await _offlineCache.locationsAt(lat, lng))
+            .map((l) => (id: l.id, name: l.name))
+            .toList();
+      }
 
-      if (resp.statusCode != 200) return;
+      final insideIds = inside.map((l) => l.id).toSet();
+      final previous = _insideLocationIds ?? <String>{};
+      _insideLocationIds = insideIds;
 
-      final body = jsonDecode(resp.body) as Map<String, dynamic>;
-      final questions =
-          (body['questions'] as List?)
-              ?.whereType<Map<String, dynamic>>()
-              .toList() ??
-          [];
+      // Only newly entered locations trigger a question (nearest first).
+      final entered = inside.where((l) => !previous.contains(l.id)).toList();
+      if (entered.isEmpty) return;
+      final target = entered.first;
 
-      if (questions.isEmpty) return;
-
-      // Use first question; prefer the one matching a specific locationId if available.
-      final q = questions.first;
-      final questionId = q['id'] as String? ?? '';
-      if (questionId.isEmpty) return;
-
-      // Deduplication – don't ask the same question again within cooldown.
-      if (_lastSentQuestionId == questionId &&
-          _lastSentQuestionAt != null &&
-          DateTime.now().difference(_lastSentQuestionAt!) < _questionCooldown) {
+      LocationQuestion? question;
+      if (online != null) {
+        final qs = online.questions;
+        if (qs.isNotEmpty) {
+          question = qs.firstWhere(
+            (q) => q.locationId == target.id,
+            orElse: () => qs.first,
+          );
+        }
+      } else {
+        question = await _offlineCache.questionFor(
+          locationId: target.id,
+          matchedLocationIds: insideIds.toList(),
+        );
+      }
+      if (question == null || question.options.length < bleQuestionMinOptions) {
+        AppLogger.info('FG geofence: entered ${target.name}, no question');
         return;
       }
 
-      final rawOptions =
-          (q['options'] as List?)?.whereType<Map<String, dynamic>>().toList() ??
-          [];
-      if (rawOptions.length < bleQuestionMinOptions) return;
-
-      final prompt = BleQuestionPrompt(
-        questionId: questionId,
-        question: q['prompt'] as String? ?? '',
-        options: rawOptions
-            .map(
-              (o) => BleQuestionOption(
-                id: o['id'] as String? ?? '',
-                label: o['label'] as String? ?? '',
-              ),
-            )
-            .toList(),
-      );
-
-      final command = buildBleQuestionCommand(prompt);
-      final safeId = _extractCommandId(command);
-
-      if (!_isConnected) {
-        AppLogger.info('FG geofence: watch not connected, skipping send');
-        return;
-      }
-
-      await _sendBleCommand(command);
-
-      _lastSentQuestionId = questionId;
-      _lastSentQuestionAt = DateTime.now();
-
-      AppLogger.info(
-        'FG geofence: question sent – ${q['locationName'] ?? questionId}',
-      );
-      _updateStatusNotification('Pergunta enviada ao relógio');
-
-      // Notify main isolate so it saves the record to DB when it wakes up.
-      FlutterForegroundTask.sendDataToMain({
-        'type': 'fg_question_sent',
-        'locationId': q['locationId'] as String? ?? questionId,
-        'locationName': q['locationName'] as String? ?? '',
-        'questionId': safeId,
-        'command': command,
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-      });
+      await _askQuestion(question, locationId: target.id, locationName: target.name);
     } catch (e) {
       AppLogger.debug('FG geofence check error: $e');
+    } finally {
+      _geofenceBusy = false;
     }
   }
 
-  Future<void> _sendBleCommand(String command) async {
+  /// Server resolve; null when offline / failed.
+  Future<({List<({String id, String name})> locations, List<LocationQuestion> questions})?>
+      _resolveOnline(double lat, double lng) async {
+    try {
+      final resp = await http
+          .post(
+            Uri.parse('${AppConfig.serverApiUrl}/api/location/resolve'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ${AppConfig.appAuthToken}',
+            },
+            body: jsonEncode({
+              'deviceId': 'mobile-app',
+              'latitude': lat,
+              'longitude': lng,
+            }),
+          )
+          .timeout(const Duration(seconds: 5));
+      if (resp.statusCode != 200) return null;
+
+      final body = jsonDecode(resp.body) as Map<String, dynamic>;
+      final locations = ((body['locations'] as List?) ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map((l) => (id: l['id'] as String, name: l['name'] as String? ?? ''))
+          .toList();
+      final questions = ((body['questions'] as List?) ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(LocationQuestion.fromJson)
+          .where((q) => q.options.length >= bleQuestionMinOptions)
+          .toList();
+
+      // We're online: opportunistically keep the offline bundle fresh.
+      unawaited(_offlineCache.refreshIfStale(_cacheMaxAge));
+      return (locations: locations, questions: questions);
+    } catch (e) {
+      AppLogger.debug('FG resolve offline: $e');
+      return null;
+    }
+  }
+
+  /// Persists the question, sends it to the watch when connected and shows
+  /// the phone notification with quick replies.
+  Future<void> _askQuestion(
+    LocationQuestion question, {
+    required String locationId,
+    required String locationName,
+  }) async {
+    final prompt = BleQuestionPrompt(
+      questionId: question.id,
+      question: question.prompt,
+      options: question.options
+          .map((o) => BleQuestionOption(id: o.id, label: o.label))
+          .toList(),
+    );
+    final command = buildBleQuestionCommand(prompt);
+    final safeId = _extractCommandId(command);
+
+    // Dedup against the DB (shared with the UI isolate).
+    final now = DateTime.now();
+    final recent = (await _responses.getAll()).any(
+      (r) =>
+          r.questionId == safeId &&
+          now.difference(r.timestamp) < _questionDedupWindow,
+    );
+    if (recent) {
+      AppLogger.info('FG geofence: $safeId asked recently, skipping');
+      return;
+    }
+
+    final sent = _isConnected && await _sendBleCommand(command);
+    final record = sent
+        ? await _responses.saveQuestionSent(
+            locationId: locationId,
+            locationName: locationName,
+            questionId: safeId,
+            questionCommand: command,
+          )
+        : await _responses.saveWatchOffline(
+            locationId: locationId,
+            locationName: locationName,
+            questionId: safeId,
+            questionCommand: command,
+          );
+
+    await QuestionNotificationService().showQuestion(
+      QuestionNotificationPayload.fromPrompt(
+        prompt,
+        locationId: locationId,
+        locationName: locationName,
+        recordId: record.id,
+        command: command,
+      ),
+    );
+
+    AppLogger.info(
+      'FG geofence: question ${sent ? "sent to watch" : "on phone only"} – $locationName',
+    );
+    _updateStatusNotification(
+      sent ? 'Pergunta enviada ao relógio' : 'Nova pergunta: $locationName',
+    );
+  }
+
+  Future<bool> _sendBleCommand(String command) async {
     final deviceId = _deviceId;
     final serviceUuid = _serviceUuid;
     final notifyUuid = _notifyUuid;
@@ -806,7 +961,7 @@ class BleForegroundTaskHandler extends TaskHandler {
         notifyUuid == null ||
         !_isConnected) {
       AppLogger.warning('FG BLE send skipped: sem conexão ativa');
-      return;
+      return false;
     }
 
     // The write characteristic is the same as notify for HM-10 style modules.
@@ -834,8 +989,10 @@ class BleForegroundTaskHandler extends TaskHandler {
         }
       }
       AppLogger.debug('FG BLE sent: ${bytes.length} bytes');
+      return true;
     } catch (e) {
       AppLogger.warning('FG BLE send error: $e');
+      return false;
     }
   }
 

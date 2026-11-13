@@ -101,11 +101,11 @@ class ReactiveBleDataSource {
       final devices = [
         BleDeviceModel(
           id: 'mock-device-1',
-          name: 'ESP32',
+          name: 'Relógio (simulado)',
           rssi: -45,
           isPreferred:
               filterByName == null ||
-              filterByName.toLowerCase().contains('esp32'),
+              'relógio (simulado)'.contains(filterByName.toLowerCase()),
         ),
         BleDeviceModel(
           id: 'mock-device-2',

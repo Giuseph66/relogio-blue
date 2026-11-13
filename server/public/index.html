@@ -4,612 +4,923 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Relogio Blutu | Dashboard Público</title>
+  <title>GeoNexo · Painel público de respostas</title>
+  <meta name="description" content="Respostas coletadas pelos relógios nos locais monitorados, em tempo real, com dados abertos para download." />
+  <meta name="color-scheme" content="light" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <style>
     :root {
+      --bg: #f6f7f9;
+      --surface: #ffffff;
+      --surface-2: #f3f4f6;
+      --border: #e3e6ea;
+      --text: #111827;
+      --text-2: #374151;
+      --muted: #5b6472;          /* >= 4.5:1 on --bg and --surface */
+      --accent: #0b6e6e;          /* >= 4.5:1 on white and on --accent-soft */
+      --accent-soft: #e4f3f2;
+      --bar-track: #e9ecef;
+      --bar-other: #7fb8b5;
+      --live: #15803d;
+      --off: #b45309;
+      --warn-bg: #fff7e6;
+      --warn-border: #f5d48a;
+      --flash: #fff4c2;
+      --radius: 12px;
+      --shadow: 0 1px 2px rgba(16, 24, 40, .05);
+      --focus: 0 0 0 3px #ffffff, 0 0 0 6px #0b6e6e;
       color-scheme: light;
-      --bg: #eef3f2;
-      --surface: rgba(255, 255, 255, 0.82);
-      --line: rgba(17, 32, 36, 0.12);
-      --text: #162327;
-      --muted: #5f7075;
-      --accent: #0f8c8c;
-      --accent-2: #1e6b97;
-      --danger: #c95b4d;
-      --warning: #c08a22;
-      --success: #25896a;
-      --shadow: 0 18px 48px rgba(17, 32, 36, 0.12);
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { font-size: 100%; }
+    html, body { margin: 0; }
+    h1, h2, h3, p, ul, ol, dl, dd { margin: 0; }
+    ul, ol { padding: 0; list-style: none; }
+    [hidden] { display: none !important; }
 
     body {
-      margin: 0;
-      font-family: "Sora", "Segoe UI", sans-serif;
+      font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-size: .9375rem;
+      line-height: 1.5;
       color: var(--text);
-      background:
-        radial-gradient(circle at top left, rgba(15, 140, 140, 0.2), transparent 28%),
-        radial-gradient(circle at bottom right, rgba(201, 91, 77, 0.14), transparent 22%),
-        var(--bg);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
     }
 
-    .hero {
-      padding: 32px 24px 12px;
+    a { color: var(--accent); }
+    a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
+      outline: none;
+      box-shadow: var(--focus);
+      border-radius: 8px;
     }
 
-    .hero-card {
-      max-width: 100%;
-      margin: 0 auto;
-      padding: 28px;
-      border-radius: 28px;
-      background:
-        linear-gradient(135deg, rgba(21, 32, 33, 0.96), rgba(15, 140, 140, 0.86)),
-        #152021;
-      color: #f5fbfb;
-      box-shadow: var(--shadow);
-      display: flex;
-      justify-content: space-between;
-      gap: 24px;
-      align-items: end;
+    .sr-only {
+      position: absolute !important;
+      width: 1px; height: 1px;
+      margin: -1px; padding: 0; border: 0;
+      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
     }
 
-    .hero h1 {
-      margin: 12px 0 10px;
-      font-size: clamp(2rem, 4vw, 3.6rem);
-      line-height: 1.02;
-      max-width: 11ch;
-    }
-
-    .hero p {
-      max-width: 60ch;
-      color: rgba(245, 251, 251, 0.8);
-      line-height: 1.7;
-    }
-
-    .eyebrow {
-      display: inline-flex;
-      padding: 8px 12px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.1);
-      font-size: 0.74rem;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-    }
-
-    .hero-actions {
-      display: grid;
-      gap: 12px;
-      justify-items: end;
-    }
-
-    .hero-actions a {
+    .skip-link {
+      position: absolute;
+      left: 16px;
+      top: -48px;
+      z-index: 2000;
+      padding: 10px 14px;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 8px;
+      font-weight: 600;
       text-decoration: none;
-      color: #f5fbfb;
-      background: rgba(255, 255, 255, 0.12);
-      padding: 12px 16px;
-      border-radius: 16px;
+    }
+    .skip-link:focus { top: 12px; }
+
+    .icon {
+      width: 1.125rem; height: 1.125rem;
+      fill: none; stroke: currentColor; stroke-width: 1.8;
+      stroke-linecap: round; stroke-linejoin: round;
+      flex-shrink: 0;
     }
 
-    main {
-      max-width: 100%;
-      margin: 0 auto;
-      padding: 12px 24px 40px;
-      display: grid;
-      gap: 22px;
-    }
+    .cap { text-transform: capitalize; }
 
-    .stats-grid,
-    .grid-two {
-      display: grid;
-      gap: 18px;
-    }
-
-    .stats-grid {
-      grid-template-columns: repeat(6, minmax(0, 1fr));
-    }
-
-    .grid-two {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .card {
-      background: var(--surface);
-      border: 1px solid rgba(255, 255, 255, 0.48);
-      border-radius: 26px;
-      box-shadow: var(--shadow);
-      padding: 22px;
-      backdrop-filter: blur(16px);
-    }
-
-    .stat-card span,
-    .card-head p,
-    .status-text,
-    .muted,
-    .table-wrap td small {
-      color: var(--muted);
-    }
-
-    .stat-card strong {
-      display: block;
-      margin-top: 10px;
-      font-size: 1.8rem;
-    }
-
-    .card-head {
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      align-items: start;
-      margin-bottom: 18px;
-    }
-
-    .card-head h2,
-    .card-head h3 {
-      margin: 10px 0 6px;
-    }
-
-    .status-row {
+    /* ---------- Buttons ---------- */
+    .btn {
       display: inline-flex;
       align-items: center;
-      gap: 10px;
-      padding: 12px 14px;
-      border-radius: 999px;
-      background: rgba(17, 32, 36, 0.06);
-    }
-
-    .dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--danger);
-    }
-
-    .dot.online {
-      background: var(--success);
-    }
-
-    .city-bars,
-    .device-list,
-    .message-list {
-      display: grid;
-      gap: 12px;
-    }
-
-    .city-bar,
-    .device-item,
-    .message-item {
-      border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.7);
-      border-radius: 18px;
-      padding: 14px 16px;
-    }
-
-    .city-bar strong,
-    .device-item strong,
-    .message-item strong {
-      display: block;
-      margin-bottom: 6px;
-    }
-
-    .bar {
-      height: 12px;
-      border-radius: 999px;
-      overflow: hidden;
-      background: rgba(17, 32, 36, 0.08);
-    }
-
-    .bar>span {
-      display: block;
-      height: 100%;
-      border-radius: inherit;
-      background: linear-gradient(135deg, var(--accent), var(--accent-2));
-    }
-
-    .table-wrap {
-      overflow: auto;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      min-width: 880px;
-    }
-
-    th,
-    td {
-      padding: 14px 12px;
-      text-align: left;
-      border-bottom: 1px solid var(--line);
-    }
-
-    th {
-      font-size: 0.88rem;
-      color: var(--muted);
-    }
-
-    .pill {
-      display: inline-flex;
-      padding: 8px 10px;
-      border-radius: 999px;
-      font-size: 0.8rem;
-      font-weight: 600;
-    }
-
-    .pill.success {
-      background: rgba(37, 137, 106, 0.12);
-      color: var(--success);
-    }
-
-    .pill.warning {
-      background: rgba(192, 138, 34, 0.14);
-      color: var(--warning);
-    }
-
-    .pill.danger {
-      background: rgba(201, 91, 77, 0.12);
-      color: var(--danger);
-    }
-
-    .pill.neutral {
-      background: rgba(17, 32, 36, 0.08);
+      justify-content: center;
+      gap: 6px;
+      min-height: 40px;
+      padding: 0 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
       color: var(--text);
+      font: inherit;
+      font-size: .875rem;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn:hover { background: var(--surface-2); }
+    .btn .icon { width: 1rem; height: 1rem; }
+    .btn-sm { min-height: 34px; padding: 0 10px; font-size: .8125rem; }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #095a5a; }
+    .btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+    /* ---------- Header ---------- */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: rgba(255, 255, 255, .94);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
     }
 
-    .message-item header {
+    .wrap { width: min(1280px, 100%); margin: 0 auto; padding-inline: 24px; }
+
+    .header-inner { display: flex; align-items: center; gap: 12px; min-height: 64px; flex-wrap: wrap; }
+    .brand { display: flex; align-items: center; gap: 10px; margin-right: auto; text-decoration: none; color: inherit; }
+    .brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--accent); color: #fff; }
+    .brand-name { display: block; font-size: 1rem; font-weight: 700; line-height: 1.1; }
+    .brand-sub { display: block; font-size: .75rem; color: var(--muted); }
+
+    .live { display: inline-flex; align-items: center; gap: 8px; font-size: .875rem; font-weight: 500; color: var(--text-2); }
+    .live-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--off); }
+    .live.on .live-dot { background: var(--live); animation: pulse 2s infinite; }
+    .live.paused .live-dot { background: var(--muted); animation: none; }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(21, 128, 61, .35); }
+      70% { box-shadow: 0 0 0 8px rgba(21, 128, 61, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(21, 128, 61, 0); }
+    }
+
+    /* ---------- Main ---------- */
+    main { padding-block: 28px 16px; display: flex; flex-direction: column; gap: 24px; }
+
+    .intro { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+    .intro h1 { font-size: 1.625rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.25; }
+    .intro p { color: var(--muted); margin-top: 6px; max-width: 680px; }
+
+    .notice {
       display: flex;
-      justify-content: space-between;
+      align-items: center;
       gap: 10px;
-      font-size: 0.82rem;
-      color: var(--muted);
+      padding: 12px 16px;
+      background: var(--warn-bg);
+      border: 1px solid var(--warn-border);
+      border-radius: var(--radius);
+      color: #78350f;
+      font-size: .875rem;
     }
 
-    .message-item p {
-      margin: 8px 0 0;
-      line-height: 1.6;
+    .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); }
+    .kpi dt { font-size: .8125rem; color: var(--muted); font-weight: 500; }
+    .kpi dd.value { margin-top: 6px; font-size: 1.875rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .kpi dd.sub { font-size: .8125rem; color: var(--muted); margin-top: 4px; }
+    .kpi .bump { animation: bump .7s ease-out; }
+    @keyframes bump { 30% { color: var(--accent); } }
+
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); min-width: 0; display: flex; flex-direction: column; }
+    .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--border); min-height: 58px; flex-wrap: wrap; }
+    .card-head h2, .card-head h3 { font-size: 1rem; font-weight: 600; }
+    .card-head .hint { font-size: .8125rem; color: var(--muted); }
+
+    .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .section-head h2 { font-size: 1.1875rem; font-weight: 700; }
+    .section-head p { font-size: .875rem; color: var(--muted); }
+
+    .grid-main, .grid-bottom { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 20px; }
+
+    /* ---------- Map / list ---------- */
+    .map-card { min-height: 480px; }
+    .map { flex: 1; min-height: 420px; background: var(--surface-2); border-radius: 0 0 var(--radius) var(--radius); }
+    .leaflet-container { font-family: inherit; }
+    .leaflet-popup-content { margin: 12px 14px; font-size: .8125rem; line-height: 1.45; min-width: 200px; }
+    .popup-title { font-weight: 700; font-size: .875rem; }
+    .popup-meta { color: var(--muted); font-size: .75rem; }
+    .popup-q { margin-top: 8px; color: var(--text-2); }
+    .popup-lead { margin-top: 4px; font-weight: 700; color: var(--accent); }
+    .loc-label { background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 6px; font-size: .75rem; font-weight: 600; padding: 2px 6px; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+    .loc-label::before { display: none; }
+    .hide-labels .loc-label { display: none; }
+
+    .table-wrap { overflow: auto; flex: 1; }
+    table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+    caption { text-align: left; padding: 12px 18px 0; color: var(--muted); font-size: .8125rem; }
+    th { text-align: left; font-weight: 600; font-size: .8125rem; color: var(--text-2); background: var(--surface-2); padding: 10px 18px; border-bottom: 1px solid var(--border); white-space: nowrap; position: sticky; top: 0; }
+    td { padding: 10px 18px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tbody th { background: none; position: static; font-weight: 600; font-size: .875rem; color: var(--text); white-space: normal; padding: 10px 18px; }
+    tbody tr:last-child td, tbody tr:last-child th { border-bottom: 0; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* ---------- Feed ---------- */
+    .feed-card { max-height: 480px; }
+    .feed { overflow: auto; flex: 1; }
+    .feed li { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 12px 18px; border-bottom: 1px solid var(--border); }
+    .feed li:last-child { border-bottom: 0; }
+    .feed li.new { animation: flash 2.5s ease-out; }
+    @keyframes flash { 0% { background: var(--flash); } 100% { background: transparent; } }
+    .feed-time { font-size: .8125rem; color: var(--muted); white-space: nowrap; text-align: right; }
+    .feed-q { grid-column: 1 / -1; color: var(--text-2); font-size: .875rem; }
+    .feed-place { grid-column: 1 / -1; font-size: .8125rem; color: var(--muted); }
+    .answer-chip { display: inline-block; padding: 2px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: .8125rem; }
+
+    /* ---------- Results ---------- */
+    .results { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+    .result { padding: 18px; gap: 12px; }
+    .result-place { font-size: .8125rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+    .result-place .icon { width: .875rem; height: .875rem; }
+    .result h3 { font-size: 1rem; font-weight: 600; line-height: 1.4; }
+    .opts { display: flex; flex-direction: column; gap: 10px; }
+    .opt-head { display: flex; justify-content: space-between; gap: 8px; font-size: .875rem; margin-bottom: 4px; }
+    .opt-head span { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .opt.lead .opt-label { font-weight: 700; }
+    .opt.lead .opt-head span { color: var(--text); font-weight: 600; }
+    .lead-tag { font-size: .6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--accent); margin-left: 6px; }
+    .track { height: 10px; border-radius: 999px; background: var(--bar-track); overflow: hidden; }
+    .track span { display: block; height: 100%; border-radius: inherit; background: var(--bar-other); transition: width .5s ease; }
+    .opt.lead .track span { background: var(--accent); }
+    .result-foot { display: flex; justify-content: space-between; gap: 8px; font-size: .8125rem; color: var(--muted); border-top: 1px solid var(--border); padding-top: 10px; margin-top: auto; }
+
+    /* ---------- Chart / cities ---------- */
+    .chart-box { position: relative; height: 260px; padding: 14px 18px; }
+    .bars { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+    .bar-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; font-size: .875rem; }
+    .bar-row .name { font-weight: 500; }
+    .bar-row .val { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .bar-row .track { grid-column: 1 / -1; }
+    .bar-row .track span { background: var(--accent); }
+
+    /* ---------- Open data ---------- */
+    .open-data { padding: 22px; gap: 18px; }
+    .open-data-intro { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; }
+    .open-data-intro p { color: var(--text-2); max-width: 720px; }
+    .datasets { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+    .dataset { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+    .dataset h3 { font-size: .9375rem; font-weight: 600; }
+    .dataset p { font-size: .8125rem; color: var(--muted); flex: 1; }
+    .dataset .fields { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; color: var(--text-2); }
+    .dataset-actions { display: flex; gap: 8px; margin-top: 6px; }
+    .api-box { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px; background: var(--surface-2); border-radius: 10px; font-size: .875rem; }
+    .api-box code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8125rem; background: #fff; border: 1px solid var(--border); padding: 4px 8px; border-radius: 6px; word-break: break-all; }
+    .facts { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: .8125rem; color: var(--muted); }
+    .facts li { display: flex; align-items: center; gap: 6px; }
+    .facts .icon { width: 1rem; height: 1rem; color: var(--accent); }
+
+    .empty { padding: 32px 18px; text-align: center; color: var(--muted); font-size: .875rem; }
+    .skeleton { background: linear-gradient(90deg, var(--surface-2), var(--border), var(--surface-2)); background-size: 200% 100%; animation: shimmer 1.2s infinite; border-radius: 6px; color: transparent !important; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    footer { padding-block: 20px 36px; color: var(--muted); font-size: .8125rem; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
     }
 
-    .empty {
-      color: var(--muted);
-      padding: 8px 0;
+    @media (max-width: 960px) {
+      .grid-main, .grid-bottom { grid-template-columns: 1fr; }
+      .map-card { min-height: 0; }
+      .map { min-height: 340px; }
+      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .open-data-intro { grid-template-columns: 1fr; }
     }
 
-    .chart-wrapper {
-      position: relative;
-      height: 260px;
-      width: 100%;
+    @media (max-width: 560px) {
+      .wrap { padding-inline: 16px; }
+      .brand-sub, .hide-sm { display: none; }
+      .intro h1 { font-size: 1.375rem; }
+      .kpi dd.value { font-size: 1.5rem; }
+      .results { grid-template-columns: 1fr; }
+      th, td { padding-inline: 12px; }
     }
 
-    @media (max-width: 1180px) {
-      .stats-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-
-      .grid-two {
-        grid-template-columns: 1fr;
-      }
-
-      .hero-card {
-        flex-direction: column;
-        align-items: start;
-      }
-
-      .hero-actions {
-        justify-items: start;
-      }
-    }
-
-    @media (max-width: 720px) {
-      .stats-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
-      }
-
-      .stat-card {
-        padding: 14px;
-      }
-
-      .stat-card strong {
-        font-size: 1.4rem;
-      }
-
-      .hero,
-      main {
-        padding-left: 16px;
-        padding-right: 16px;
-      }
-
-      .hero-card,
-      .card {
-        padding: 18px;
-        border-radius: 22px;
-      }
-
-      .hero h1 {
-        font-size: 2.1rem;
-      }
-
-      .hero-actions {
-        width: 100%;
-      }
-
-      .hero-actions .status-row {
-        justify-content: center;
-        width: 100%;
-        margin-bottom: 8px;
-      }
-
-      .hero-actions a {
-        text-align: center;
-        width: 100%;
-      }
+    @media print {
+      .header, .btn, .map-card, .skip-link { display: none !important; }
+      body { background: #fff; }
+      .card { box-shadow: none; break-inside: avoid; }
     }
   </style>
 </head>
 
 <body>
-  <section class="hero">
-    <div class="hero-card">
-      <div>
-        <span class="eyebrow">Status Global</span>
-        <h1>Painel Operacional em Tempo Real</h1>
-        <p>
-          Monitore a telemetria ao vivo da frota de dispositivos. Analise a conectividade,
-          o fluxo de mensagens BLE e a distribuição contínua de processamento.
-        </p>
-      </div>
-      <div class="hero-actions">
-        <div class="status-row">
-          <span class="dot" id="status-dot"></span>
-          <span class="status-text" id="status-text">Conectando ao stream...</span>
-        </div>
-        <a href="/admin/login">Área Administrativa</a>
-      </div>
+  <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m7 4 13 8-13 8V4Z"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></symbol>
+    <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></symbol>
+  </svg>
+
+  <header class="header">
+    <div class="wrap header-inner">
+      <a class="brand" href="/" aria-label="GeoNexo, painel público">
+        <span class="brand-mark" aria-hidden="true"><svg class="icon"><use href="#i-pin" /></svg></span>
+        <span><span class="brand-name">GeoNexo</span><span class="brand-sub">Painel público</span></span>
+      </a>
+      <span id="live" class="live"><span class="live-dot" aria-hidden="true"></span><span id="live-text">Conectando…</span></span>
+      <button id="pause-btn" class="btn btn-sm" type="button" aria-pressed="false">
+        <svg class="icon" aria-hidden="true"><use href="#i-pause" /></svg><span id="pause-label">Pausar atualização</span>
+      </button>
+      <a class="btn btn-sm" href="/admin/login">
+        <svg class="icon" aria-hidden="true"><use href="#i-lock" /></svg><span class="hide-sm">Administração</span><span class="sr-only">Área administrativa</span>
+      </a>
     </div>
-  </section>
+  </header>
 
-  <main>
-    <section class="stats-grid" id="stats-grid"></section>
-
-    <section class="grid-two">
-      <article class="card">
-        <div class="card-head">
-          <div>
-            <span class="eyebrow">Respostas</span>
-            <h2>Volume recente</h2>
-            <p>Histórico diário das respostas registradas pelo servidor.</p>
-          </div>
-        </div>
-        <div class="chart-wrapper">
-          <canvas id="volume-chart"></canvas>
-        </div>
-      </article>
-
-      <article class="card">
-        <div class="card-head">
-          <div>
-            <span class="eyebrow">Processamento</span>
-            <h2>Status das respostas</h2>
-            <p>Distribuição entre itens processados, pendentes e falhos.</p>
-          </div>
-        </div>
-        <div class="chart-wrapper">
-          <canvas id="status-chart"></canvas>
-        </div>
-      </article>
+  <main id="conteudo" class="wrap" tabindex="-1">
+    <section class="intro" aria-labelledby="titulo">
+      <div>
+        <h1 id="titulo">Respostas em tempo real</h1>
+        <p>Quando alguém com o relógio chega a um local monitorado, recebe uma pergunta. As respostas aparecem aqui assim que são enviadas. Todos os dados são anônimos e podem ser baixados livremente.</p>
+      </div>
+      <a class="btn" href="#dados-abertos"><svg class="icon" aria-hidden="true"><use href="#i-download" /></svg>Baixar dados</a>
     </section>
 
-    <section class="grid-two">
-      <article class="card">
-        <div class="card-head">
-          <div>
-            <span class="eyebrow">Origem</span>
-            <h3>Cidades com maior volume</h3>
-          </div>
-        </div>
-        <div id="top-cities" class="city-bars"></div>
-      </article>
+    <div id="notice" class="notice" role="status" hidden>
+      <svg class="icon" aria-hidden="true"><use href="#i-alert" /></svg><span id="notice-text"></span>
+    </div>
 
-      <article class="card">
+    <section aria-labelledby="kpi-title">
+      <h2 id="kpi-title" class="sr-only">Indicadores</h2>
+      <dl class="kpis">
+        <div class="kpi"><dt>Respostas hoje</dt><dd class="value skeleton" data-kpi="today">00</dd><dd class="sub" data-kpi-sub="today">&nbsp;</dd></div>
+        <div class="kpi"><dt>Total de respostas</dt><dd class="value skeleton" data-kpi="total">00</dd><dd class="sub" data-kpi-sub="total">&nbsp;</dd></div>
+        <div class="kpi"><dt>Locais monitorados</dt><dd class="value skeleton" data-kpi="locations">00</dd><dd class="sub" data-kpi-sub="locations">&nbsp;</dd></div>
+        <div class="kpi"><dt>Relógios ativos hoje</dt><dd class="value skeleton" data-kpi="devices">00</dd><dd class="sub" data-kpi-sub="devices">&nbsp;</dd></div>
+      </dl>
+    </section>
+
+    <div class="grid-main">
+      <section class="card map-card" aria-labelledby="map-title">
         <div class="card-head">
-          <div>
-            <span class="eyebrow">Coleta</span>
-            <h3>Respostas recentes</h3>
-            <p>Últimos eventos enviados pelos aplicativos conectados.</p>
-          </div>
+          <h2 id="map-title">Locais monitorados</h2>
+          <button id="map-toggle" class="btn btn-sm" type="button" aria-pressed="false" aria-controls="map locations-table-wrap">
+            <svg class="icon" aria-hidden="true"><use href="#i-table" /></svg>Ver como lista
+          </button>
         </div>
-        <div class="table-wrap">
+        <div id="map" class="map" role="region" aria-label="Mapa interativo dos locais. A mesma informação está disponível no botão Ver como lista."></div>
+        <div id="locations-table-wrap" class="table-wrap" tabindex="0" role="region" aria-label="Lista de locais monitorados" hidden>
           <table>
-            <thead>
-              <tr>
-                <th>Recebido em</th>
-                <th>Pergunta</th>
-                <th>Resposta</th>
-                <th>Cidade</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="responses-table"></tbody>
+            <caption>Locais monitorados, respostas recebidas e a resposta mais escolhida.</caption>
+            <thead><tr><th scope="col">Local</th><th scope="col">Cidade</th><th scope="col" class="num">Respostas</th><th scope="col">Mais escolhida</th></tr></thead>
+            <tbody id="locations-table"></tbody>
           </table>
         </div>
-      </article>
+      </section>
+
+      <section class="card feed-card" aria-labelledby="feed-title">
+        <div class="card-head">
+          <h2 id="feed-title">Últimas respostas</h2>
+          <span id="updated-at" class="hint"></span>
+        </div>
+        <ol id="feed" class="feed" tabindex="0" aria-labelledby="feed-title"></ol>
+      </section>
+    </div>
+
+    <section aria-labelledby="results-title">
+      <div class="section-head">
+        <h2 id="results-title">Resultados por pergunta</h2>
+        <p id="questions-count"></p>
+      </div>
+      <div id="results" class="results" style="margin-top:12px"></div>
+    </section>
+
+    <div class="grid-bottom">
+      <section class="card" aria-labelledby="chart-title">
+        <div class="card-head">
+          <h2 id="chart-title">Respostas por dia <span class="hint">(últimos 14 dias)</span></h2>
+          <button id="chart-toggle" class="btn btn-sm" type="button" aria-pressed="false" aria-controls="chart-box days-table-wrap">
+            <svg class="icon" aria-hidden="true"><use href="#i-table" /></svg>Ver como tabela
+          </button>
+        </div>
+        <div id="chart-box" class="chart-box"><canvas id="volume-chart" role="img" aria-label="Gráfico de barras com o número de respostas por dia. Use o botão Ver como tabela para os valores."></canvas></div>
+        <div id="days-table-wrap" class="table-wrap" tabindex="0" role="region" aria-label="Tabela de respostas por dia" hidden>
+          <table>
+            <caption>Número de respostas por dia nos últimos 14 dias.</caption>
+            <thead><tr><th scope="col">Dia</th><th scope="col" class="num">Respostas</th></tr></thead>
+            <tbody id="days-table"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="cities-title">
+        <div class="card-head"><h2 id="cities-title">Respostas por cidade</h2></div>
+        <ul id="cities" class="bars"></ul>
+      </section>
+    </div>
+
+    <section id="dados-abertos" class="card open-data" aria-labelledby="open-title" tabindex="-1">
+      <div class="open-data-intro">
+        <div>
+          <div class="section-head"><h2 id="open-title">Dados abertos</h2></div>
+          <p style="margin-top:6px">Baixe os dados para analisar em planilhas ou sistemas. O CSV usa separador <strong>;</strong> e vírgula decimal (abre direto no Excel e LibreOffice em português). O JSON serve para integração com outros sistemas.</p>
+        </div>
+      </div>
+
+      <ul class="facts">
+        <li><svg class="icon" aria-hidden="true"><use href="#i-shield" /></svg>Anônimos: sem identificação de relógio ou de pessoa, sem localização de quem respondeu</li>
+        <li><svg class="icon" aria-hidden="true"><use href="#i-clock" /></svg>Atualizados em tempo real a cada download</li>
+      </ul>
+
+      <ul class="datasets" id="datasets">
+        <li class="dataset">
+          <h3>Resultados por pergunta</h3>
+          <p>Total e percentual de cada opção de resposta.</p>
+          <span class="fields">pergunta, local, cidade, opcao, total, percentual</span>
+          <div class="dataset-actions" data-dataset="resultados"></div>
+        </li>
+        <li class="dataset">
+          <h3>Todas as respostas</h3>
+          <p>Uma linha por resposta recebida, com data e hora (UTC).</p>
+          <span class="fields">data_hora_utc, local, cidade, pergunta, resposta</span>
+          <div class="dataset-actions" data-dataset="respostas"></div>
+        </li>
+        <li class="dataset">
+          <h3>Respostas por dia</h3>
+          <p>Contagem diária dos últimos 365 dias, no seu fuso horário.</p>
+          <span class="fields">data, total</span>
+          <div class="dataset-actions" data-dataset="por-dia"></div>
+        </li>
+        <li class="dataset">
+          <h3>Locais monitorados</h3>
+          <p>Locais públicos ativos, com posição e raio de detecção.</p>
+          <span class="fields">local, cidade, latitude, longitude, raio_m, total_respostas</span>
+          <div class="dataset-actions" data-dataset="locais"></div>
+        </li>
+      </ul>
+
+      <div class="api-box">
+        <span>API (JSON, sem autenticação):</span>
+        <code id="api-url">/api/public/dashboard</code>
+        <button id="copy-api" class="btn btn-sm" type="button"><svg class="icon" aria-hidden="true"><use href="#i-copy" /></svg><span>Copiar endereço</span></button>
+      </div>
     </section>
   </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <footer class="wrap">
+    <span>GeoNexo · dados anônimos e agregados</span>
+    <span id="footer-updated"></span>
+  </footer>
+
+  <!-- Announces new responses to screen readers without re-reading the whole list. -->
+  <div id="announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script>
-    const statusDot = document.getElementById('status-dot');
-    const statusText = document.getElementById('status-text');
-    const statsGrid = document.getElementById('stats-grid');
-    const topCities = document.getElementById('top-cities');
-    const responsesTable = document.getElementById('responses-table');
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const CACHE_KEY = 'geonexo-public-cache-v1';
+      const TZ = new Date().getTimezoneOffset();
+      const hasLeaflet = typeof window.L !== 'undefined';
+      const hasChart = typeof window.Chart !== 'undefined';
 
-    let volumeChart;
-    let statusChart;
+      const state = {
+        data: null,
+        seenIds: new Set(),
+        firstRender: true,
+        paused: false,
+        missed: 0,
+        loading: false,
+        queued: false,
+        retryTimer: null,
+        map: null,
+        layer: null,
+        fitted: false,
+        chart: null,
+        connected: false,
+      };
 
-    function setStatus(online) {
-      statusDot.classList.toggle('online', online);
-      statusText.textContent = online ? 'Stream online' : 'Stream offline';
-    }
+      /* ---------------- Cache (shows last data if the server is unreachable) ---------------- */
 
-    function escapeHtml(value) {
-      return String(value || '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#039;');
-    }
-
-    function formatDate(value) {
-      if (!value) return '-';
-      return new Date(value).toLocaleString('pt-BR');
-    }
-
-    function statusClass(status) {
-      if (status === 'processed' || status === 'done') return 'success';
-      if (status === 'pending' || status === 'processing') return 'warning';
-      if (status === 'failed') return 'danger';
-      return 'neutral';
-    }
-
-    function renderStats(summary) {
-      const items = [
-        ['Dispositivos', summary.devicesCount],
-        ['Locais', summary.locationsCount],
-        ['Perguntas', summary.questionsCount],
-        ['Respostas', summary.totalResponses],
-        ['Pendentes', summary.pendingResponses],
-        ['Hoje', summary.responsesToday],
-      ];
-
-      statsGrid.innerHTML = items
-        .map(([label, value]) => `
-            <article class="card stat-card">
-              <span>${label}</span>
-              <strong>${value}</strong>
-            </article>
-          `)
-        .join('');
-    }
-
-    function renderCities(items) {
-      if (!items.length) {
-        topCities.innerHTML = '<p class="muted">Sem dados de cidades ainda.</p>';
-        return;
+      function readCache() {
+        try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch (_) { return null; }
+      }
+      function writeCache(data) {
+        try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch (_) { /* storage unavailable */ }
       }
 
-      const max = Math.max(...items.map((item) => item.total));
-      topCities.innerHTML = items
-        .map((item) => `
-            <article class="city-bar">
-              <strong>${escapeHtml(item.city)}</strong>
-              <div class="bar"><span style="width:${(item.total / max) * 100}%"></span></div>
-              <small class="muted">${item.total} respostas</small>
-            </article>
-          `)
-        .join('');
-    }
+      /* ---------------- Data loading ---------------- */
 
-    function renderResponses(items) {
-      if (!items.length) {
-        responsesTable.innerHTML = '<tr><td colspan="5" class="muted">Nenhuma resposta registrada.</td></tr>';
-        return;
+      async function load({ force = false } = {}) {
+        if (state.paused && !force) { state.missed += 1; updatePauseLabel(); return; }
+        if (state.loading) { state.queued = true; return; }
+        state.loading = true;
+        clearTimeout(state.retryTimer);
+
+        try {
+          const response = await fetch(`/api/public/dashboard?tz=${TZ}`, { cache: 'no-store' });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const data = await response.json();
+          writeCache(data);
+          showNotice('');
+          render(data);
+        } catch (error) {
+          console.error(error);
+          if (state.data) {
+            showNotice(`Sem conexão com o servidor. Mostrando dados de ${fullDate(state.data.generatedAt)}. Tentando novamente…`);
+          } else {
+            showNotice('Não foi possível carregar os dados agora. Tentando novamente…');
+            $('feed').innerHTML = '<li class="empty">Dados indisponíveis no momento.</li>';
+          }
+          state.retryTimer = setTimeout(() => load({ force: true }), 15000);
+        } finally {
+          state.loading = false;
+          if (state.queued) { state.queued = false; load(); }
+        }
       }
 
-      responsesTable.innerHTML = items
-        .map((item) => `
-            <tr>
-              <td>${formatDate(item.receivedAt)}</td>
-              <td>${escapeHtml(item.questionPrompt || item.questionId || '-')}</td>
-              <td>${escapeHtml(item.answerText || item.answerId || '-')}</td>
-              <td>${escapeHtml(item.city || '-')}</td>
-              <td><span class="pill ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td>
-            </tr>
-          `)
-        .join('');
-    }
+      function showNotice(text) {
+        $('notice').hidden = !text;
+        $('notice-text').textContent = text;
+      }
 
-    function renderCharts(data) {
-      const volumeCtx = document.getElementById('volume-chart');
-      const statusCtx = document.getElementById('status-chart');
+      function render(data) {
+        const previous = state.data;
+        state.data = data;
+        renderKpis(data.summary, previous?.summary);
+        renderFeed(data.recentResponses || []);
+        renderLocations(data.locations || [], data.questions || []);
+        renderResults(data.questions || []);
+        renderDays(data.volumeByDay || []);
+        renderCities(data.topCities || []);
+        renderUpdated();
+        state.firstRender = false;
+      }
 
-      if (volumeChart) volumeChart.destroy();
-      if (statusChart) statusChart.destroy();
+      /* ---------------- KPIs ---------------- */
 
-      volumeChart = new Chart(volumeCtx, {
-        type: 'line',
-        data: {
-          labels: data.volumeByDay.map((item) => item.day),
-          datasets: [
-            {
-              label: 'Respostas',
-              data: data.volumeByDay.map((item) => item.total),
-              borderColor: '#0f8c8c',
-              backgroundColor: 'rgba(15, 140, 140, 0.12)',
-              fill: true,
-              tension: 0.35,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false },
+      function renderKpis(s, prev) {
+        const values = {
+          today: [s.responsesToday, `${fmt(s.responsesWeek)} nos últimos 7 dias`],
+          total: [s.totalResponses, 'desde o início'],
+          locations: [s.activeLocations, s.activeLocations === 1 ? 'local ativo' : 'locais ativos'],
+          devices: [s.devicesActiveToday, `de ${fmt(s.devices)} cadastrados`],
+        };
+        const before = prev && {
+          today: prev.responsesToday, total: prev.totalResponses,
+          locations: prev.activeLocations, devices: prev.devicesActiveToday,
+        };
+
+        for (const [key, [value, sub]] of Object.entries(values)) {
+          const el = document.querySelector(`[data-kpi="${key}"]`);
+          el.classList.remove('skeleton');
+          el.textContent = fmt(value);
+          document.querySelector(`[data-kpi-sub="${key}"]`).textContent = sub;
+          if (before && before[key] !== value) {
+            el.classList.remove('bump');
+            void el.offsetWidth;
+            el.classList.add('bump');
+          }
+        }
+      }
+
+      /* ---------------- Feed ---------------- */
+
+      function renderFeed(items) {
+        const feed = $('feed');
+        if (!items.length) {
+          feed.innerHTML = '<li class="empty">Nenhuma resposta ainda. Elas aparecem aqui assim que chegarem.</li>';
+          return;
+        }
+
+        const fresh = state.firstRender ? [] : items.filter((i) => !state.seenIds.has(i.id));
+
+        feed.innerHTML = items.map((item) => {
+          const isNew = fresh.includes(item);
+          return `
+            <li class="${isNew ? 'new' : ''}">
+              <span><span class="sr-only">Resposta: </span><span class="answer-chip">${esc(item.answer || '—')}</span></span>
+              <time class="feed-time" datetime="${esc(item.receivedAt)}" title="${esc(fullDate(item.receivedAt))}">${esc(ago(item.receivedAt))}</time>
+              <span class="feed-q"><span class="sr-only">Pergunta: </span>${esc(item.questionPrompt || 'Pergunta removida')}</span>
+              <span class="feed-place">${placeHtml(item.locationName, item.city)}</span>
+            </li>`;
+        }).join('');
+
+        items.forEach((i) => state.seenIds.add(i.id));
+
+        if (fresh.length) {
+          const first = fresh[0];
+          $('announcer').textContent = fresh.length === 1
+            ? `Nova resposta: ${first.answer || 'sem texto'}${first.locationName ? `, em ${first.locationName}` : ''}.`
+            : `${fresh.length} novas respostas recebidas.`;
+        }
+      }
+
+      /* ---------------- Locations: map + accessible table ---------------- */
+
+      function leadOption(q) {
+        if (!q || !q.total) return null;
+        return q.options.reduce((best, o) => (o.total > best.total ? o : best), q.options[0]);
+      }
+
+      function renderLocations(locations, questions) {
+        const rows = locations.map((loc) => {
+          const q = questions.find((item) => item.locationId === loc.id);
+          return { loc, q, lead: leadOption(q) };
+        });
+
+        $('locations-table').innerHTML = rows.length
+          ? rows.map(({ loc, q, lead }) => `
+              <tr>
+                <th scope="row">${esc(loc.name)}</th>
+                <td class="cap">${esc(loc.city || '—')}</td>
+                <td class="num">${fmt(loc.responses)}</td>
+                <td>${lead ? `${esc(lead.label)} (${pct(lead.total, q.total)})` : '—'}</td>
+              </tr>`).join('')
+          : '<tr><td colspan="4" class="empty">Nenhum local ativo.</td></tr>';
+
+        if (hasLeaflet) renderMap(rows);
+      }
+
+      function initMap() {
+        state.map = L.map('map', { scrollWheelZoom: false }).setView([-14.235, -51.925], 4);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap',
+          maxZoom: 19,
+        }).addTo(state.map);
+        state.layer = L.layerGroup().addTo(state.map);
+
+        const syncLabels = () => state.map.getContainer().classList.toggle('hide-labels', state.map.getZoom() < 11);
+        state.map.on('zoomend', syncLabels);
+        syncLabels();
+        // Wheel zoom only after the user engages the map, so page scrolling isn't hijacked.
+        state.map.once('click focus', () => state.map.scrollWheelZoom.enable());
+      }
+
+      function renderMap(rows) {
+        if (!state.map) initMap();
+        state.layer.clearLayers();
+        const accent = '#0b6e6e';
+
+        rows.forEach(({ loc, q, lead }) => {
+          const popup = `
+            <div class="popup-title">${esc(loc.name)}</div>
+            <div class="popup-meta"><span class="cap">${esc(loc.city || '')}</span> · ${fmt(loc.responses)} ${loc.responses === 1 ? 'resposta' : 'respostas'}</div>
+            ${q ? `<div class="popup-q">${esc(q.prompt)}</div>` : ''}
+            ${lead ? `<div class="popup-lead">${esc(lead.label)} · ${pct(lead.total, q.total)}</div>` : ''}`;
+
+          L.circle([loc.latitude, loc.longitude], {
+            radius: Number(loc.radiusMeters || 100),
+            color: accent, weight: 2, fillColor: accent,
+            fillOpacity: loc.responses ? 0.25 : 0.1,
+          }).bindPopup(popup).addTo(state.layer);
+
+          // Fixed-size dot keeps the place visible when zoomed out.
+          L.circleMarker([loc.latitude, loc.longitude], {
+            radius: 7, color: '#fff', weight: 2, fillColor: accent, fillOpacity: 1,
+          })
+            .bindTooltip(esc(loc.name), { permanent: true, direction: 'top', className: 'loc-label', offset: [0, -8] })
+            .bindPopup(popup)
+            .addTo(state.layer);
+        });
+
+        if (!state.fitted && rows.length) {
+          state.map.fitBounds(rows.map(({ loc }) => [loc.latitude, loc.longitude]), { padding: [40, 40], maxZoom: 15 });
+          state.fitted = true;
+        }
+      }
+
+      /* ---------------- Results ---------------- */
+
+      function renderResults(questions) {
+        const answered = questions.filter((q) => q.total > 0);
+        const list = answered.length ? answered : questions;
+        $('questions-count').textContent = questions.length
+          ? `${answered.length} de ${questions.length} perguntas já têm respostas`
+          : '';
+
+        if (!list.length) {
+          $('results').innerHTML = '<div class="card empty">Nenhuma pergunta ativa no momento.</div>';
+          return;
+        }
+
+        $('results').innerHTML = list.map((q, index) => {
+          const lead = leadOption(q);
+          const max = Math.max(1, ...q.options.map((o) => o.total));
+          const titleId = `q-${index}`;
+          return `
+            <article class="card result" aria-labelledby="${titleId}">
+              <div class="result-place"><svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg>${q.locationName ? placeHtml(q.locationName, q.city) : 'Todos os locais'}</div>
+              <h3 id="${titleId}">${esc(q.prompt)}</h3>
+              <ul class="opts">
+                ${q.options.map((o) => {
+                  const isLead = lead && o.id === lead.id;
+                  return `
+                  <li class="opt ${isLead ? 'lead' : ''}">
+                    <div class="opt-head">
+                      <span class="opt-label" style="color:var(--text)">${esc(o.label)}${isLead ? '<span class="lead-tag">mais escolhida</span>' : ''}</span>
+                      <span>${pct(o.total, q.total)} <span aria-hidden="true">·</span><span class="sr-only">,</span> ${fmt(o.total)} ${o.total === 1 ? 'voto' : 'votos'}</span>
+                    </div>
+                    <div class="track" aria-hidden="true"><span style="width:${q.total ? (o.total / max) * 100 : 0}%"></span></div>
+                  </li>`;
+                }).join('')}
+              </ul>
+              <div class="result-foot">
+                <span>${fmt(q.total)} ${q.total === 1 ? 'resposta' : 'respostas'}</span>
+                <span>${q.lastResponseAt ? `última <time datetime="${esc(q.lastResponseAt)}">${esc(ago(q.lastResponseAt))}</time>` : 'aguardando respostas'}</span>
+              </div>
+            </article>`;
+        }).join('');
+      }
+
+      /* ---------------- Daily volume: chart + table ---------------- */
+
+      function renderDays(volume) {
+        const byDay = new Map(volume.map((d) => [d.day, d.total]));
+        const days = [];
+        for (let i = 13; i >= 0; i -= 1) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          days.push({
+            short: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+            long: d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }),
+            total: byDay.get(key) || 0,
+          });
+        }
+
+        $('days-table').innerHTML = days.slice().reverse()
+          .map((d) => `<tr><td>${esc(d.long)}</td><td class="num">${fmt(d.total)}</td></tr>`).join('');
+
+        if (!hasChart) return;
+        if (state.chart) {
+          state.chart.data.labels = days.map((d) => d.short);
+          state.chart.data.datasets[0].data = days.map((d) => d.total);
+          state.chart.update('none');
+          return;
+        }
+
+        state.chart = new Chart($('volume-chart'), {
+          type: 'bar',
+          data: {
+            labels: days.map((d) => d.short),
+            datasets: [{ label: 'Respostas', data: days.map((d) => d.total), backgroundColor: '#0b6e6e', borderRadius: 4, maxBarThickness: 28 }],
           },
-        },
-      });
-
-      const statusEntries = Object.entries(data.responseStatusCounts || {});
-      statusChart = new Chart(statusCtx, {
-        type: 'doughnut',
-        data: {
-          labels: statusEntries.map(([label]) => label),
-          datasets: [
-            {
-              data: statusEntries.map(([, value]) => value),
-              backgroundColor: ['#0f8c8c', '#c08a22', '#c95b4d', '#1e6b97'],
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? false : undefined,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { grid: { display: false }, ticks: { color: '#5b6472', maxRotation: 0, autoSkip: true } },
+              y: { beginAtZero: true, ticks: { precision: 0, color: '#5b6472' }, grid: { color: '#eceff2' }, border: { display: false } },
             },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-        },
-      });
-    }
-
-    async function loadDashboard() {
-      const response = await fetch('/api/public/dashboard');
-      const data = await response.json();
-      renderStats(data.summary);
-      renderCities(data.topCities || []);
-      renderResponses(data.recentResponses || []);
-      renderCharts(data);
-    }
-
-    async function bootstrap() {
-      try {
-        await loadDashboard();
-      } catch (error) {
-        statusText.textContent = 'Falha ao carregar dashboard';
+          },
+        });
       }
 
-      const source = new EventSource('/events');
-      source.addEventListener('init', (event) => {
-        setStatus(true);
+      function renderCities(cities) {
+        if (!cities.length) {
+          $('cities').innerHTML = '<li class="empty">Sem dados ainda.</li>';
+          return;
+        }
+        const max = Math.max(...cities.map((c) => c.total));
+        $('cities').innerHTML = cities.map((c) => `
+          <li class="bar-row">
+            <span class="name cap">${esc(c.city)}</span>
+            <span class="val">${fmt(c.total)} ${c.total === 1 ? 'resposta' : 'respostas'}</span>
+            <div class="track" aria-hidden="true"><span style="width:${(c.total / max) * 100}%"></span></div>
+          </li>`).join('');
+      }
+
+      function renderUpdated() {
+        if (!state.data) return;
+        const at = state.data.generatedAt;
+        $('updated-at').textContent = `atualizado ${ago(at)}`;
+        $('footer-updated').textContent = `Última atualização: ${fullDate(at)}`;
+        document.querySelectorAll('#feed time, #results time').forEach((el) => { el.textContent = ago(el.getAttribute('datetime')); });
+      }
+
+      /* ---------------- View toggles (map/list, chart/table) ---------------- */
+
+      function bindToggle(button, primary, alternative, labels) {
+        const apply = (showAlt) => {
+          button.setAttribute('aria-pressed', String(showAlt));
+          button.lastChild.textContent = showAlt ? labels[1] : labels[0];
+          primary.hidden = showAlt;
+          alternative.hidden = !showAlt;
+          if (!showAlt && state.map && primary.id === 'map') state.map.invalidateSize();
+          if (!showAlt && state.chart && primary.id === 'chart-box') state.chart.resize();
+        };
+        button.addEventListener('click', () => apply(button.getAttribute('aria-pressed') !== 'true'));
+        return apply;
+      }
+
+      const showMapList = bindToggle($('map-toggle'), $('map'), $('locations-table-wrap'), ['Ver como lista', 'Ver mapa']);
+      const showDaysTable = bindToggle($('chart-toggle'), $('chart-box'), $('days-table-wrap'), ['Ver como tabela', 'Ver gráfico']);
+
+      // If a CDN is unreachable, fall back to the accessible table views.
+      if (!hasLeaflet) { showMapList(true); $('map-toggle').hidden = true; }
+      if (!hasChart) { showDaysTable(true); $('chart-toggle').hidden = true; }
+
+      /* ---------------- Pause (WCAG 2.2.2) ---------------- */
+
+      function updatePauseLabel() {
+        const btn = $('pause-btn');
+        btn.setAttribute('aria-pressed', String(state.paused));
+        btn.querySelector('use').setAttribute('href', state.paused ? '#i-play' : '#i-pause');
+        $('pause-label').textContent = state.paused
+          ? (state.missed ? `Retomar (${state.missed} ${state.missed === 1 ? 'novidade' : 'novidades'})` : 'Retomar atualização')
+          : 'Pausar atualização';
+        setLive(state.connected);
+      }
+
+      $('pause-btn').addEventListener('click', () => {
+        state.paused = !state.paused;
+        const hadMissed = state.missed > 0;
+        state.missed = 0;
+        updatePauseLabel();
+        if (!state.paused && hadMissed) load({ force: true });
       });
-      source.addEventListener('error', () => setStatus(false));
 
-      setInterval(loadDashboard, 15000);
-    }
+      /* ---------------- Live connection (SSE) ---------------- */
 
-    bootstrap();
+      function setLive(on) {
+        state.connected = on;
+        const live = $('live');
+        live.classList.toggle('on', on && !state.paused);
+        live.classList.toggle('paused', state.paused);
+        $('live-text').textContent = state.paused ? 'Atualização pausada' : on ? 'Ao vivo' : 'Reconectando…';
+      }
+
+      function connect() {
+        if (!('EventSource' in window)) { setLive(false); return; }
+        const source = new EventSource('/events');
+        source.addEventListener('open', () => setLive(true));
+        source.addEventListener('init', () => setLive(true));
+        source.addEventListener('error', () => setLive(false));
+        source.addEventListener('response', debounce(() => load(), 600));
+      }
+
+      /* ---------------- Open data links ---------------- */
+
+      document.querySelectorAll('[data-dataset]').forEach((el) => {
+        const name = el.dataset.dataset;
+        const title = el.closest('.dataset').querySelector('h3').textContent;
+        el.innerHTML = ['csv', 'json'].map((ext) => `
+          <a class="btn btn-sm ${ext === 'csv' ? 'btn-primary' : ''}" href="/api/public/export/${name}.${ext}?tz=${TZ}" download>
+            <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>${ext.toUpperCase()}<span class="sr-only"> de ${esc(title)}</span>
+          </a>`).join('');
+      });
+
+      const apiUrl = `${location.origin}/api/public/dashboard`;
+      $('api-url').textContent = apiUrl;
+      $('copy-api').addEventListener('click', async () => {
+        const label = $('copy-api').lastChild;
+        try {
+          await navigator.clipboard.writeText(apiUrl);
+          label.textContent = 'Copiado!';
+        } catch (_) {
+          label.textContent = 'Selecione e copie';
+        }
+        setTimeout(() => { label.textContent = 'Copiar endereço'; }, 2000);
+      });
+
+      /* ---------------- Utils ---------------- */
+
+      function esc(value) {
+        return String(value ?? '')
+          .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+      }
+
+      function placeHtml(name, city) {
+        if (!name && !city) return '&nbsp;';
+        return [name && esc(name), city && `<span class="cap">${esc(city)}</span>`].filter(Boolean).join(' · ');
+      }
+
+      function fmt(n) { return Number(n || 0).toLocaleString('pt-BR'); }
+      function pct(part, total) { return total ? `${Math.round((part / total) * 100)}%` : '0%'; }
+      function fullDate(v) { return v ? new Date(v).toLocaleString('pt-BR') : ''; }
+
+      function ago(v) {
+        if (!v) return '';
+        const s = (Date.now() - new Date(v).getTime()) / 1000;
+        if (s < 45) return 'agora';
+        if (s < 3600) return `há ${Math.max(1, Math.round(s / 60))} min`;
+        if (s < 86400) return `há ${Math.round(s / 3600)} h`;
+        if (s < 7 * 86400) return `há ${Math.round(s / 86400)} d`;
+        return new Date(v).toLocaleDateString('pt-BR');
+      }
+
+      function debounce(fn, wait) {
+        let t;
+        return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), wait); };
+      }
+
+      /* ---------------- Boot ---------------- */
+
+      const cached = readCache();
+      if (cached) {
+        render(cached);
+        showNotice(`Mostrando dados salvos de ${fullDate(cached.generatedAt)}. Atualizando…`);
+      }
+      load({ force: true });
+      connect();
+      setInterval(() => { if (!document.hidden && !state.paused) load(); }, 60000); // fallback if the live connection drops
+      setInterval(renderUpdated, 30000);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden && !state.paused) load(); });
+    })();
   </script>
 </body>
 

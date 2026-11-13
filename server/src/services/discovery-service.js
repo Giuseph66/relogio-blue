@@ -8,7 +8,7 @@ const REQUEST_HEADERS = {
   'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
 };
 
-async function searchCities(query) {
+async function searchCities(query, { viewbox = null, limit = 6 } = {}) {
   const trimmed = String(query || '').trim();
   if (!trimmed) {
     throw new HttpError(400, 'query is required');
@@ -18,8 +18,12 @@ async function searchCities(query) {
   url.searchParams.set('q', trimmed);
   url.searchParams.set('format', 'jsonv2');
   url.searchParams.set('addressdetails', '1');
-  url.searchParams.set('limit', '6');
+  url.searchParams.set('limit', String(limit));
   url.searchParams.set('countrycodes', 'br');
+  if (viewbox) {
+    // Prefer (but don't restrict to) results inside the admin's current map view.
+    url.searchParams.set('viewbox', viewbox);
+  }
 
   const results = await fetchJson(url.toString());
   return results.map((item) => ({
@@ -164,6 +168,37 @@ async function validateLocation({ city, latitude, longitude }) {
   };
 }
 
+async function reverseGeocode({ latitude, longitude }) {
+  const lat = toNullableNumber(latitude);
+  const lng = toNullableNumber(longitude);
+  if (lat === null || lng === null) {
+    throw new HttpError(400, 'latitude and longitude are required');
+  }
+
+  const url = new URL('/reverse', NOMINATIM_BASE_URL);
+  url.searchParams.set('format', 'jsonv2');
+  url.searchParams.set('lat', String(lat));
+  url.searchParams.set('lon', String(lng));
+  url.searchParams.set('zoom', '18');
+  url.searchParams.set('addressdetails', '1');
+
+  const result = await fetchJson(url.toString());
+  const address = result.address || {};
+  const city =
+    address.city || address.town || address.municipality || address.village || null;
+  const street = [address.road, address.house_number].filter(Boolean).join(', ');
+
+  return {
+    latitude: lat,
+    longitude: lng,
+    city,
+    state: address.state || null,
+    name: result.name || null,
+    shortAddress: [street, address.suburb, city].filter(Boolean).join(' · ') || null,
+    displayName: result.display_name || null,
+  };
+}
+
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, {
     ...options,
@@ -248,4 +283,5 @@ module.exports = {
   searchCities,
   searchPublicPlaces,
   validateLocation,
+  reverseGeocode,
 };

@@ -9,8 +9,20 @@ const {
   createQuestion,
   updateQuestion,
   deleteQuestion,
+  deleteQuestionsByLocation,
 } = require('../repositories/question-repository');
 const { HttpError } = require('../utils/http-error');
+
+function assertValidOptions(options) {
+  if (options === undefined) return;
+  if (!Array.isArray(options)) {
+    throw new HttpError(400, 'options must be an array');
+  }
+  const filled = options.filter((option) => String(option?.label || '').trim());
+  if (filled.length < 2 || filled.length > 4) {
+    throw new HttpError(400, 'a question needs between 2 and 4 options');
+  }
+}
 
 async function getLocations(req, res) {
   const locations = await listLocations();
@@ -34,6 +46,8 @@ async function putLocation(req, res) {
 }
 
 async function removeLocation(req, res) {
+  // Linked questions would otherwise become city-wide questions (location_id SET NULL).
+  await deleteQuestionsByLocation(req.params.locationId);
   const deleted = await deleteLocation(req.params.locationId);
   if (!deleted) {
     throw new HttpError(404, 'location not found');
@@ -50,11 +64,13 @@ async function postQuestion(req, res) {
   if (!req.body?.prompt) {
     throw new HttpError(400, 'prompt is required');
   }
+  assertValidOptions(req.body.options);
   const question = await createQuestion(req.body);
   res.status(201).json({ ok: true, question });
 }
 
 async function putQuestion(req, res) {
+  assertValidOptions(req.body?.options);
   const question = await updateQuestion(req.params.questionId, req.body || {});
   if (!question) {
     throw new HttpError(404, 'question not found');

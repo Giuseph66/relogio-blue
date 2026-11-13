@@ -4,243 +4,273 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>GeoNexo Admin | GeoNexo Server</title>
+  <title>GeoNexo Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="stylesheet" href="/admin/admin.css" />
 </head>
 
-<body class="admin-body">
-  <div class="admin-layout">
-    <aside class="admin-sidebar">
-      <div class="brand-block">
-        <span class="eyebrow">Servidor Privado</span>
-        <h1>GeoNexo Admin</h1>
-        <p>Painel de configuração e observabilidade do backend.</p>
+<body class="app-body">
+  <!-- Icon sprite -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></symbol>
+    <symbol id="i-building" viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 10h.01M15 10h.01"/></symbol>
+    <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></symbol>
+    <symbol id="i-crosshair" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></symbol>
+    <symbol id="i-locate" viewBox="0 0 24 24"><path d="m3 11 19-9-9 19-2-8-8-2Z"/></symbol>
+  </svg>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><svg><use href="#i-pin" /></svg></span>
+        <div>
+          <strong>GeoNexo</strong>
+          <span>Admin</span>
+        </div>
       </div>
-      <nav class="admin-nav">
-        <a href="/admin/config" data-nav="config">Configuração</a>
-        <a href="/admin/dashboard" data-nav="dashboard">Dashboard</a>
+
+      <nav class="nav">
+        <a href="/admin/config" data-nav="config"><svg><use href="#i-pin" /></svg><span>Locais</span></a>
+        <a href="/admin/dashboard" data-nav="dashboard"><svg><use href="#i-chart" /></svg><span>Respostas</span></a>
       </nav>
+
       <div class="sidebar-foot">
-        <span id="session-email"></span>
-        <button id="logout-button" class="ghost-btn">Sair</button>
+        <span id="session-email" class="session-email"></span>
+        <button id="logout-button" class="icon-btn" title="Sair" aria-label="Sair"><svg><use href="#i-logout" /></svg></button>
       </div>
     </aside>
 
-    <main class="admin-main">
-      <header class="admin-topbar">
-        <div>
-          <span class="eyebrow">Administração</span>
-          <h2 id="page-title">Configuração de Locais</h2>
-        </div>
-        <div class="topbar-actions">
-          <button id="refresh-button" class="ghost-btn">Atualizar</button>
-        </div>
-      </header>
-
-      <section id="config-view" class="view-section">
-        <div class="grid-two">
-          <section class="panel-card">
-            <div class="panel-head">
-              <div>
-                <span class="eyebrow">Descoberta</span>
-                <h3>Buscar cidade e locais públicos</h3>
-              </div>
-            </div>
-            <div class="field-row">
-              <label class="field grow">
-                <span>Cidade</span>
-                <input id="city-query" type="text" placeholder="Ex: Sinop" />
-              </label>
-              <button id="city-search-button" class="primary-btn compact">Buscar cidade</button>
-            </div>
-            <div id="city-results" class="result-list"></div>
-            <div class="field-row">
-              <button id="public-places-button" class="ghost-btn compact">Procurar locais públicos</button>
-              <button id="reload-catalog-button" class="ghost-btn compact">Recarregar locais salvos</button>
-            </div>
-            <div id="places-results" class="result-list places-list"></div>
-          </section>
-
-          <section class="panel-card tall-card">
-            <div class="panel-head">
-              <div>
-                <span class="eyebrow">Mapa</span>
-                <h3>Posicionamento e validação</h3>
-              </div>
-              <span id="validation-pill" class="status-pill neutral">Aguardando validação</span>
-            </div>
-            <div id="admin-map" class="admin-map"></div>
-            <div id="validation-message" class="helper-text"></div>
-          </section>
-        </div>
-
-        <div class="grid-two bottom-grid">
-          <section class="panel-card">
-            <div class="panel-head">
-              <div>
-                <span class="eyebrow">Configuração</span>
-                <h3>Local monitorado</h3>
-              </div>
-            </div>
-            <form id="location-form" class="stack-form">
-              <input id="location-id" type="hidden" />
-              <label class="field">
-                <span>Nome do local</span>
-                <input id="location-name" type="text" placeholder="Praça, campus, órgão público..." required />
-              </label>
-              <label class="field">
-                <span>Cidade</span>
-                <input id="location-city" type="text" placeholder="Cidade selecionada" required />
-              </label>
-              <div class="field-grid-3">
-                <label class="field">
-                  <span>Latitude</span>
-                  <input id="location-latitude" type="number" step="0.000001" required />
-                </label>
-                <label class="field">
-                  <span>Longitude</span>
-                  <input id="location-longitude" type="number" step="0.000001" required />
-                </label>
-                <label class="field">
-                  <span>Raio (m)</span>
-                  <input id="location-radius" type="number" min="10" step="10" value="120" />
-                </label>
-              </div>
-              <label class="field">
-                <span>Regras do local</span>
-                <textarea id="location-rules" rows="4"
-                  placeholder="Uma por linha no formato: tipo|valor|prioridade&#10;Ex: notify|Avisar ao entrar no local|1"></textarea>
-              </label>
-              <div class="field-row">
-                <button id="validate-location-button" type="button" class="ghost-btn compact">Validar
-                  localização</button>
-                <button type="submit" class="primary-btn compact">Salvar local</button>
-              </div>
-            </form>
-          </section>
-
-          <section class="panel-card">
-            <div class="panel-head">
-              <div>
-                <span class="eyebrow">Pergunta vinculada</span>
-                <h3>Mensagem para o relógio</h3>
-              </div>
-            </div>
-            <form id="question-form" class="stack-form">
-              <input id="question-id" type="hidden" />
-              <label class="field">
-                <span>Pergunta</span>
-                <textarea id="question-prompt" rows="3" placeholder="Ex: Você chegou ao ponto monitorado?"></textarea>
-              </label>
-              <div id="question-options-container" class="stack-form" style="margin-top: 0">
-                <!-- Opções inseridas via JS -->
-              </div>
-              <button type="button" id="add-option-btn" class="ghost-btn compact" style="margin-top: -8px;">+ Adicionar
-                Opção (Máx 4)</button>
-              <label class="checkbox-field">
-                <input id="question-reactive-enabled" type="checkbox" checked />
-                <span>Ativar envio reativo para o dispositivo</span>
-              </label>
-              <div class="field-row">
-                <button id="clear-question-button" type="button" class="ghost-btn compact">Limpar pergunta</button>
-                <button type="submit" class="primary-btn compact">Salvar pergunta vinculada</button>
-              </div>
-            </form>
-          </section>
-        </div>
-
-        <section class="panel-card">
-          <div class="panel-head">
-            <div>
-              <span class="eyebrow">Catálogo atual</span>
-              <h3>Locais configurados no servidor</h3>
-            </div>
+    <main class="main">
+      <!-- ============ LOCAIS ============ -->
+      <section id="config-view" class="view view-locations">
+        <header class="topbar">
+          <div class="topbar-title">
+            <h1>Locais</h1>
+            <span id="locations-count" class="muted"></span>
           </div>
-          <div id="saved-locations" class="saved-locations"></div>
-        </section>
+          <div class="place-search" id="place-search">
+            <svg class="place-search-icon"><use href="#i-search" /></svg>
+            <input id="place-search-input" type="search" autocomplete="off"
+              placeholder="Buscar endereço, local ou colar coordenadas…" />
+            <kbd>/</kbd>
+            <div id="place-search-results" class="search-results" hidden></div>
+          </div>
+          <button id="new-location-button" class="btn btn-primary"><svg><use href="#i-plus" /></svg>Novo local</button>
+        </header>
+
+        <div class="workspace">
+          <!-- Left panel: list or editor -->
+          <div class="side-panel">
+            <!-- List -->
+            <div id="list-panel" class="panel-pane">
+              <div class="list-filter">
+                <input id="list-filter-input" type="search" placeholder="Filtrar locais…" />
+              </div>
+              <div id="locations-list" class="locations-list"></div>
+            </div>
+
+            <!-- Editor -->
+            <form id="editor-panel" class="panel-pane editor" hidden novalidate>
+              <div class="editor-head">
+                <button type="button" id="editor-back" class="icon-btn" title="Voltar (Esc)" aria-label="Voltar"><svg><use href="#i-back" /></svg></button>
+                <h2 id="editor-title">Novo local</h2>
+                <div class="history-btns" role="group" aria-label="Histórico de edição">
+                  <button type="button" id="editor-undo" class="icon-btn" title="Desfazer (Ctrl+Z)" aria-label="Desfazer" aria-keyshortcuts="Control+Z" disabled><svg><use href="#i-undo" /></svg></button>
+                  <button type="button" id="editor-redo" class="icon-btn" title="Refazer (Ctrl+Y)" aria-label="Refazer" aria-keyshortcuts="Control+Y Control+Shift+Z" disabled><svg><use href="#i-redo" /></svg></button>
+                </div>
+                <button type="button" id="editor-delete" class="icon-btn danger" title="Excluir local" aria-label="Excluir local" hidden><svg><use href="#i-trash" /></svg></button>
+              </div>
+
+              <div class="editor-body">
+                <section class="editor-section">
+                  <h3>Local</h3>
+
+                  <label class="field">
+                    <span class="field-label">Nome</span>
+                    <input id="loc-name" type="text" placeholder="Ex: Campus Sinop" maxlength="80" />
+                  </label>
+
+                  <div class="point-card" id="point-card">
+                    <svg><use href="#i-crosshair" /></svg>
+                    <div>
+                      <strong id="point-address">Clique no mapa para posicionar</strong>
+                      <span id="point-coords" class="mono"></span>
+                    </div>
+                  </div>
+
+                  <div class="field-row">
+                    <label class="field">
+                      <span class="field-label">Cidade</span>
+                      <input id="loc-city" type="text" placeholder="Detectada automaticamente" />
+                    </label>
+                    <label class="field field-switch">
+                      <span class="field-label">Ativo</span>
+                      <span class="switch"><input id="loc-active" type="checkbox" checked /><span></span></span>
+                    </label>
+                  </div>
+
+                  <div class="field">
+                    <div class="field-label-row">
+                      <span class="field-label">Raio de detecção</span>
+                      <span class="field-value"><input id="loc-radius-number" type="number" min="20" max="2000" step="10" value="120" /> m</span>
+                    </div>
+                    <input id="loc-radius" type="range" min="20" max="1000" step="10" value="120" />
+                  </div>
+                </section>
+
+                <section class="editor-section">
+                  <div class="section-head">
+                    <h3>Pergunta ao chegar</h3>
+                    <label class="switch" title="Enviar pergunta ao relógio quando o usuário entrar no raio">
+                      <input id="q-enabled" type="checkbox" checked /><span></span>
+                    </label>
+                  </div>
+
+                  <div id="question-fields">
+                    <label class="field">
+                      <div class="field-label-row">
+                        <span class="field-label">Pergunta</span>
+                        <span id="q-prompt-count" class="counter">0/44</span>
+                      </div>
+                      <textarea id="q-prompt" rows="2" placeholder="Ex: Você foi bem atendido?"></textarea>
+                      <span id="q-prompt-hint" class="hint" hidden>O relógio exibe somente os primeiros 44 caracteres.</span>
+                    </label>
+
+                    <div class="field">
+                      <div class="field-label-row">
+                        <span class="field-label">Respostas</span>
+                        <div class="presets" id="q-presets">
+                          <button type="button" data-preset="yn">Sim/Não</button>
+                          <button type="button" data-preset="ynm">+Talvez</button>
+                          <button type="button" data-preset="rating">Avaliação</button>
+                        </div>
+                      </div>
+                      <div id="q-options" class="options-list"></div>
+                      <button type="button" id="q-add-option" class="btn btn-ghost btn-sm btn-dashed"><svg><use href="#i-plus" /></svg>Adicionar resposta</button>
+                    </div>
+
+                    <div class="watch-preview" aria-label="Pré-visualização no relógio">
+                      <div class="watch-face">
+                        <p id="preview-prompt">Sua pergunta aparece aqui</p>
+                        <div id="preview-options" class="watch-options"></div>
+                      </div>
+                      <span class="watch-caption">Prévia no relógio</span>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <div class="editor-foot">
+                <span class="muted shortcut-hint"><kbd>Ctrl</kbd>+<kbd>S</kbd> salva</span>
+                <button type="button" id="editor-cancel" class="btn btn-ghost">Cancelar</button>
+                <button type="submit" id="editor-save" class="btn btn-primary">Salvar</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Map -->
+          <div class="map-wrap">
+            <div id="admin-map" class="map"></div>
+            <div class="map-toolbar">
+              <button id="public-places-button" class="map-chip" type="button"><svg><use href="#i-building" /></svg>Locais públicos nesta área</button>
+              <button id="clear-public-button" class="map-chip" type="button" hidden><svg><use href="#i-x" /></svg>Limpar</button>
+            </div>
+            <div id="map-hint" class="map-hint" hidden>Clique no mapa ou arraste o marcador para ajustar a posição</div>
+          </div>
+        </div>
       </section>
 
-      <section id="dashboard-view" class="view-section hidden">
-        <div class="stats-grid" id="stats-grid"></div>
-        <div class="grid-two">
-          <section class="panel-card">
-            <div class="panel-head">
-              <div>
-                <span class="eyebrow">Coleta</span>
-                <h3>Volume recente de respostas</h3>
-              </div>
-            </div>
-            <div style="position: relative; height: 260px; width: 100%;">
-              <canvas id="responses-line-chart"></canvas>
-            </div>
-          </section>
-          <section class="panel-card">
-            <div class="panel-head">
-              <div>
-                <span class="eyebrow">Status</span>
-                <h3>Distribuição do processamento</h3>
-              </div>
-            </div>
-            <div style="position: relative; height: 260px; width: 100%;">
-              <canvas id="responses-status-chart"></canvas>
-            </div>
-          </section>
-        </div>
-        <div class="grid-two bottom-grid">
-          <section class="panel-card">
-            <div class="panel-head">
-              <div>
-                <span class="eyebrow">Cidades</span>
-                <h3>Origem das respostas</h3>
-              </div>
-            </div>
-            <div id="top-cities" class="city-bars"></div>
-          </section>
-          <section class="panel-card">
-            <div class="panel-head">
-              <div>
-                <span class="eyebrow">Dispositivos</span>
-                <h3>Última atividade</h3>
-              </div>
-            </div>
-            <div id="recent-devices" class="device-list"></div>
-          </section>
-        </div>
-        <section class="panel-card">
-          <div class="panel-head">
-            <div>
-              <span class="eyebrow">Respostas recebidas</span>
-              <h3>Eventos recentes do aplicativo</h3>
-            </div>
+      <!-- ============ RESPOSTAS ============ -->
+      <section id="dashboard-view" class="view view-dashboard" hidden>
+        <header class="topbar">
+          <div class="topbar-title">
+            <h1>Respostas</h1>
+            <span id="dashboard-updated" class="muted"></span>
           </div>
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Recebido em</th>
-                  <th>Dispositivo</th>
-                  <th>Pergunta</th>
-                  <th>Resposta</th>
-                  <th>Cidade</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody id="responses-table"></tbody>
-            </table>
+          <button id="refresh-button" class="btn btn-ghost"><svg><use href="#i-refresh" /></svg>Atualizar</button>
+        </header>
+
+        <div class="dashboard">
+          <div class="kpis" id="stats-grid"></div>
+
+          <div class="grid-2-1">
+            <section class="card">
+              <header class="card-head"><h3>Respostas por dia</h3><span class="muted">últimos 10 dias</span></header>
+              <div class="chart-box"><canvas id="responses-line-chart"></canvas></div>
+            </section>
+            <section class="card">
+              <header class="card-head"><h3>Processamento</h3></header>
+              <div class="chart-box"><canvas id="responses-status-chart"></canvas></div>
+            </section>
           </div>
-        </section>
+
+          <section class="card">
+            <header class="card-head">
+              <h3>Últimas respostas</h3>
+              <input id="responses-filter" type="search" class="input-sm" placeholder="Filtrar por local, resposta, cidade…" />
+            </header>
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Recebida</th>
+                    <th>Local</th>
+                    <th>Pergunta</th>
+                    <th>Resposta</th>
+                    <th>Dispositivo</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="responses-table"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <div class="grid-2">
+            <section class="card">
+              <header class="card-head"><h3>Respostas por cidade</h3></header>
+              <div id="top-cities" class="bars"></div>
+            </section>
+            <section class="card">
+              <header class="card-head"><h3>Dispositivos</h3></header>
+              <div id="recent-devices" class="device-list"></div>
+            </section>
+          </div>
+        </div>
       </section>
     </main>
   </div>
 
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <dialog id="confirm-dialog" class="dialog">
+    <form method="dialog">
+      <h3 id="confirm-title">Confirmar</h3>
+      <p id="confirm-message"></p>
+      <div class="dialog-actions">
+        <button value="cancel" class="btn btn-ghost">Cancelar</button>
+        <button value="ok" class="btn btn-danger" id="confirm-ok">Excluir</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="/admin/admin.js" defer></script>
 </body>
 

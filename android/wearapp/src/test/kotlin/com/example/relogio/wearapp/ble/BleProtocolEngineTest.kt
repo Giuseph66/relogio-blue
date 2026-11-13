@@ -109,7 +109,7 @@ class BleProtocolEngineTest {
         }
 
         assertEquals("tick: 1", sent.last())
-        assertEquals("ESP32 conectado", engine.snapshot().lastTx)
+        assertEquals("Relógio conectado", engine.snapshot().lastTx)
     }
 
     @Test

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../logger/app_logger.dart';
 import '../network/connectivity_service.dart';
+import '../offline/offline_question_cache.dart';
 import '../../features/history/data/repositories/watch_response_repository.dart';
 
 /// Listens for connectivity changes and triggers a sync of pending
@@ -33,6 +34,8 @@ class SyncService {
       AppLogger.info('SyncService: online — syncing pending responses');
       try {
         await _repository.syncPending(url);
+        // Back online: refresh locations/questions used when offline.
+        await OfflineQuestionCache().refresh(baseUrl: url);
       } finally {
         _isSyncing = false;
       }

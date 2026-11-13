@@ -1,5 +1,6 @@
 const { resolveLocation } = require('../services/location-service');
 const { listActiveLocations } = require('../repositories/catalog-repository');
+const { listAllActiveQuestions } = require('../repositories/question-repository');
 
 async function resolve(req, res) {
   const payload = req.method === 'GET' ? req.query : req.body;
@@ -22,7 +23,32 @@ async function listPublic(req, res) {
   res.status(200).json({ locations });
 }
 
+/**
+ * Everything the app needs to detect visits and pick questions without
+ * network: all active locations + all active questions (with options).
+ */
+async function offlineBundle(req, res) {
+  const [rows, questions] = await Promise.all([
+    listActiveLocations(),
+    listAllActiveQuestions(),
+  ]);
+  const locations = rows.map((loc) => ({
+    id: loc.id,
+    name: loc.name,
+    city: loc.city,
+    latitude: loc.latitude,
+    longitude: loc.longitude,
+    radiusMeters: loc.radius_meters,
+  }));
+  res.status(200).json({
+    generatedAt: new Date().toISOString(),
+    locations,
+    questions,
+  });
+}
+
 module.exports = {
   resolve,
   listPublic,
+  offlineBundle,
 };

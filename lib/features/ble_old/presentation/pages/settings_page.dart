@@ -223,7 +223,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 'Título do Serviço (opcional)',
                 _backgroundServiceTitleController,
                 required: false,
-                hint: 'Ex: Relógio BLE',
+                hint: 'Ex: Relógio',
               ),
               const SizedBox(height: 20),
               _buildTextField(

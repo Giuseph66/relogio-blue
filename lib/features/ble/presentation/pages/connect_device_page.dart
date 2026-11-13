@@ -5,6 +5,7 @@ import '../../../../core/permissions/permission_helper.dart';
 import '../../../../core/ble/ble_errors.dart';
 import '../../../ble_old/presentation/controllers/ble_controller.dart';
 import '../../../ble_old/domain/entities/ble_device.dart';
+import '../../../../core/theme/app_palette.dart';
 
 class ModernConnectDevicePage extends StatefulWidget {
   const ModernConnectDevicePage({super.key});
@@ -129,7 +130,7 @@ class _ModernConnectDevicePageState extends State<ModernConnectDevicePage> with 
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: Colors.cyanAccent.withOpacity(1.0 - ((_radarController.value + (i / 3)) % 1.0)),
+                          color: context.palette.accent.withOpacity(1.0 - ((_radarController.value + (i / 3)) % 1.0)),
                           width: 2,
                         ),
                       ),
@@ -142,7 +143,7 @@ class _ModernConnectDevicePageState extends State<ModernConnectDevicePage> with 
             iconSize: 64,
             icon: Icon(
               _isScanning ? Icons.stop_circle : Icons.play_circle_fill,
-              color: Colors.cyanAccent,
+              color: context.palette.accent,
             ),
             onPressed: _isScanning ? _stopScan : _startScan,
           ),
@@ -150,7 +151,7 @@ class _ModernConnectDevicePageState extends State<ModernConnectDevicePage> with 
             bottom: 10,
             child: Text(
               _isScanning ? 'Procurando...' : 'Iniciar Busca',
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
+              style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.7), fontSize: 12),
             ),
           ),
         ],
@@ -164,13 +165,13 @@ class _ModernConnectDevicePageState extends State<ModernConnectDevicePage> with 
       child: TextField(
         controller: _filterController,
         onChanged: (_) => _startScan(),
-        style: const TextStyle(color: Colors.white),
+        style: TextStyle(color: context.palette.textPrimary),
         decoration: InputDecoration(
           hintText: 'Filtrar dispositivos...',
-          hintStyle: const TextStyle(color: Colors.white38),
-          prefixIcon: const Icon(Icons.search, color: Colors.white54),
+          hintStyle: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.38)),
+          prefixIcon: Icon(Icons.search, color: context.palette.textPrimary.withValues(alpha: 0.54)),
           filled: true,
-          fillColor: Colors.white.withOpacity(0.05),
+          fillColor: context.palette.textPrimary.withValues(alpha: 0.05),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide.none,
@@ -187,9 +188,9 @@ class _ModernConnectDevicePageState extends State<ModernConnectDevicePage> with 
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.bluetooth_disabled, size: 48, color: Colors.white24),
+            Icon(Icons.bluetooth_disabled, size: 48, color: context.palette.textPrimary.withValues(alpha: 0.24)),
             const SizedBox(height: 16),
-            const Text('Nenhum dispositivo encontrado', style: TextStyle(color: Colors.white54)),
+            Text('Nenhum dispositivo encontrado', style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.54))),
             TextButton(onPressed: _startScan, child: const Text('Tentar novamente')),
           ],
         ),
@@ -209,16 +210,16 @@ class _ModernConnectDevicePageState extends State<ModernConnectDevicePage> with 
   Widget _buildDeviceTile(BleDevice device) {
     final rssi = device.rssi ?? -100;
     Color signalColor = Colors.red;
-    if (rssi > -60) signalColor = Colors.greenAccent;
-    else if (rssi > -85) signalColor = Colors.orangeAccent;
+    if (rssi > -60) signalColor = context.palette.success;
+    else if (rssi > -85) signalColor = context.palette.warning;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: context.palette.textPrimary.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: device.isPreferred ? Colors.cyanAccent.withOpacity(0.3) : Colors.white.withOpacity(0.1),
+          color: device.isPreferred ? context.palette.accent.withValues(alpha: 0.3) : context.palette.textPrimary.withValues(alpha: 0.1),
         ),
       ),
       child: ListTile(
@@ -226,16 +227,16 @@ class _ModernConnectDevicePageState extends State<ModernConnectDevicePage> with 
         leading: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: signalColor.withOpacity(0.1),
+            color: signalColor.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(Icons.bluetooth, color: signalColor),
         ),
         title: Text(
           device.name,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(color: context.palette.textPrimary, fontWeight: FontWeight.bold),
         ),
-        subtitle: Text('ID: ${device.id}', style: const TextStyle(color: Colors.white38, fontSize: 10)),
+        subtitle: Text('ID: ${device.id}', style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.38), fontSize: 10)),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -244,8 +245,8 @@ class _ModernConnectDevicePageState extends State<ModernConnectDevicePage> with 
             ElevatedButton(
               onPressed: () => _connectToDevice(device),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
+                backgroundColor: context.palette.textPrimary,
+                foregroundColor: context.palette.onAccent,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 padding: const EdgeInsets.symmetric(horizontal: 12),
               ),
@@ -272,8 +273,8 @@ class _ModernConnectDevicePageState extends State<ModernConnectDevicePage> with 
         OutlinedButton(
           onPressed: () => AppSettings.openAppSettings(type: AppSettingsType.bluetooth),
           style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white,
-            side: BorderSide(color: Colors.white.withOpacity(0.6)),
+            foregroundColor: context.palette.textPrimary,
+            side: BorderSide(color: context.palette.textPrimary.withValues(alpha: 0.6)),
           ),
           child: const Text('Abrir Bluetooth'),
         ),
@@ -281,15 +282,15 @@ class _ModernConnectDevicePageState extends State<ModernConnectDevicePage> with 
         OutlinedButton(
           onPressed: () => _bleController.requestPermissions(),
           style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white,
-            side: BorderSide(color: Colors.white.withOpacity(0.6)),
+            foregroundColor: context.palette.textPrimary,
+            side: BorderSide(color: context.palette.textPrimary.withValues(alpha: 0.6)),
           ),
           child: const Text('Solicitar permissões'),
         ),
       if (!_permissionsGranted)
         TextButton(
           onPressed: () => PermissionHelper.openAppSettings(),
-          style: TextButton.styleFrom(foregroundColor: Colors.white70),
+          style: TextButton.styleFrom(foregroundColor: context.palette.textPrimary.withValues(alpha: 0.7)),
           child: const Text('Abrir config do app'),
         ),
     ];
@@ -297,21 +298,21 @@ class _ModernConnectDevicePageState extends State<ModernConnectDevicePage> with 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.1),
+        color: Colors.red.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.red.withOpacity(0.35)),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.35)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+              Icon(Icons.warning_amber_rounded, color: context.palette.danger),
               SizedBox(width: 8),
               Text(
                 'Atenção',
                 style: TextStyle(
-                  color: Colors.redAccent,
+                  color: context.palette.danger,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -323,7 +324,7 @@ class _ModernConnectDevicePageState extends State<ModernConnectDevicePage> with 
               padding: const EdgeInsets.only(bottom: 6),
               child: Text(
                 message,
-                style: const TextStyle(color: Colors.white70, fontSize: 13),
+                style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.7), fontSize: 13),
               ),
             ),
           Wrap(

@@ -1,13 +1,18 @@
 import 'dart:async';
+import 'dart:isolate';
+import 'dart:ui';
 
 import '../../../../core/ble/ble_question_protocol.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/logger/app_logger.dart';
+import '../../../../core/notifications/question_notification_service.dart';
+import '../../../../core/offline/offline_question_cache.dart';
 import '../../../../features/history/data/repositories/watch_response_repository.dart';
 import '../../../../features/history/domain/entities/watch_response.dart';
 import '../../../../features/ble_old/presentation/controllers/messages_controller.dart';
 import '../../../../features/ble_old/domain/entities/ble_message.dart';
 import '../../data/datasources/remote_location_data_source.dart';
+import '../../domain/entities/location_question.dart';
 import '../../domain/entities/tracked_location.dart';
 
 class _PendingQuestion {
@@ -45,7 +50,11 @@ class VisitQuestionOrchestrator {
 
   StreamSubscription<List<BleMessage>>? _messageSubscription;
   StreamSubscription<TickStatus>? _tickSubscription;
+  ReceivePort? _phoneAnswerPort;
   bool _wasOnline = false;
+
+  final QuestionNotificationService _questionNotifications =
+      QuestionNotificationService();
 
   VisitQuestionOrchestrator({
     required WatchResponseRepository responseRepository,
@@ -54,6 +63,7 @@ class VisitQuestionOrchestrator {
         _messagesController = messagesController {
     _startListeningMessages();
     _startListeningTick();
+    _startListeningPhoneAnswers();
   }
 
   // ─── Listeners ────────────────────────────────────────────────────────────
@@ -83,6 +93,7 @@ class VisitQuestionOrchestrator {
       if (pending == null) return;
 
       pending.timeoutTimer?.cancel();
+      unawaited(_questionNotifications.cancelQuestion(result.questionId));
 
       AppLogger.info(
         'VisitQuestionOrchestrator: answer received for ${result.questionId}',
@@ -103,6 +114,47 @@ class VisitQuestionOrchestrator {
       }
       _wasOnline = status.online;
     });
+  }
+
+  /// Answers chosen from the phone notification are persisted by
+  /// [QuestionNotificationService.handleResponse] (possibly in a background
+  /// isolate); here we only drop the pending entry so a late watch QANS does
+  /// not overwrite it.
+  void _startListeningPhoneAnswers() {
+    final port = ReceivePort();
+    IsolateNameServer.removePortNameMapping(kQuestionAnswerPortName);
+    IsolateNameServer.registerPortWithName(port.sendPort, kQuestionAnswerPortName);
+    port.listen((message) {
+      if (message is! Map) return;
+      final questionId = message['questionId'] as String?;
+      if (questionId == null) return;
+      final pending = _pending.remove(questionId);
+      pending?.timeoutTimer?.cancel();
+      AppLogger.info(
+        'VisitQuestionOrchestrator: $questionId answered from phone '
+        '(pending ${pending != null ? "cleared" : "none"})',
+      );
+    });
+    _phoneAnswerPort = port;
+  }
+
+  void _showPhoneQuestion({
+    required BleQuestionPrompt prompt,
+    required TrackedLocation location,
+    required String recordId,
+    required String command,
+  }) {
+    unawaited(
+      _questionNotifications.showQuestion(
+        QuestionNotificationPayload.fromPrompt(
+          prompt,
+          locationId: location.id,
+          locationName: location.name,
+          recordId: recordId,
+          command: command,
+        ),
+      ),
+    );
   }
 
   // ─── Auto-resend on reconnect ─────────────────────────────────────────────
@@ -129,6 +181,48 @@ class VisitQuestionOrchestrator {
 
   // ─── Public API ───────────────────────────────────────────────────────────
 
+  /// The question that a visit to [location] would trigger (same selection
+  /// rule as [handleVisit]). Null when there is none.
+  ///
+  /// Asks the server first; without network falls back to the offline cache
+  /// ([OfflineQuestionCache]), which mirrors the same selection rules.
+  Future<LocationQuestion?> resolveQuestionFor(
+    TrackedLocation location, {
+    double? latitude,
+    double? longitude,
+    String? city,
+  }) async {
+    final lat = latitude ?? location.latitude;
+    final lng = longitude ?? location.longitude;
+
+    final List<LocationQuestion> questions;
+    try {
+      final dataSource = RemoteLocationDataSource(baseUrl: AppConfig.serverApiUrl);
+      questions = await dataSource.fetchQuestionsForVisit(
+        latitude: lat,
+        longitude: lng,
+        city: city,
+      );
+    } catch (e) {
+      AppLogger.info(
+        'VisitQuestionOrchestrator: server unreachable ($e) — using offline cache',
+      );
+      final cache = OfflineQuestionCache();
+      final matched = await cache.locationsAt(lat, lng);
+      return cache.questionFor(
+        locationId: location.id,
+        matchedLocationIds: matched.map((l) => l.id).toList(),
+        city: city,
+      );
+    }
+
+    if (questions.isEmpty) return null;
+    return questions.firstWhere(
+      (q) => q.locationId == location.id,
+      orElse: () => questions.first,
+    );
+  }
+
   /// Called when a geofence visit is detected.
   Future<bool> handleVisit(
     TrackedLocation location, {
@@ -137,22 +231,17 @@ class VisitQuestionOrchestrator {
     String? city,
   }) async {
     try {
-      final dataSource = RemoteLocationDataSource(baseUrl: AppConfig.serverApiUrl);
-      final questions = await dataSource.fetchQuestionsForVisit(
-        latitude: latitude ?? location.latitude,
-        longitude: longitude ?? location.longitude,
+      final question = await resolveQuestionFor(
+        location,
+        latitude: latitude,
+        longitude: longitude,
         city: city,
       );
 
-      if (questions.isEmpty) {
+      if (question == null) {
         AppLogger.info('VisitQuestionOrchestrator: no questions for ${location.name}');
         return false;
       }
-
-      final question = questions.firstWhere(
-        (q) => q.locationId == location.id,
-        orElse: () => questions.first,
-      );
 
       final prompt = BleQuestionPrompt(
         questionId: question.id,
@@ -180,11 +269,17 @@ class VisitQuestionOrchestrator {
 
       if (!watchAvailable) {
         AppLogger.info('VisitQuestionOrchestrator: watch offline for ${location.name}');
-        await _responseRepository.saveWatchOffline(
+        final offlineRecord = await _responseRepository.saveWatchOffline(
           locationId: location.id,
           locationName: location.name,
           questionId: safeQuestionId,
           questionCommand: command,
+        );
+        _showPhoneQuestion(
+          prompt: prompt,
+          location: location,
+          recordId: offlineRecord.id,
+          command: command,
         );
         return true;
       }
@@ -203,6 +298,12 @@ class VisitQuestionOrchestrator {
       );
 
       _registerPending(safeQuestionId, record.id, location.id, location.name);
+      _showPhoneQuestion(
+        prompt: prompt,
+        location: location,
+        recordId: record.id,
+        command: command,
+      );
       return true;
     } catch (e) {
       AppLogger.warning('VisitQuestionOrchestrator: handleVisit error: $e');
@@ -274,6 +375,9 @@ class VisitQuestionOrchestrator {
     _pending.clear();
     _messageSubscription?.cancel();
     _tickSubscription?.cancel();
+    IsolateNameServer.removePortNameMapping(kQuestionAnswerPortName);
+    _phoneAnswerPort?.close();
+    _phoneAnswerPort = null;
   }
 }
 

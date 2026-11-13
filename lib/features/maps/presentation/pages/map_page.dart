@@ -1,18 +1,25 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart' as fm;
+import 'package:latlong2/latlong.dart';
 import 'package:geocoding/geocoding.dart' as geocoding;
+import '../../../../core/config/app_config.dart';
 import '../../../../core/di/dependency_injection.dart';
 import '../../../maps_old/presentation/controllers/map_controller.dart';
 import '../../../maps_old/presentation/widgets/permission_state_view.dart';
 import '../../../maps_old/domain/entities/map_location.dart';
 import '../../../../core/geofence/geofence_service.dart';
 import '../../../../core/permissions/permission_helper.dart';
+import '../../../../core/widgets/app_map.dart';
 import '../../../location_tracker/presentation/controllers/location_tracker_controller.dart';
 import '../../../location_tracker/presentation/widgets/add_location_dialog.dart';
+import '../../../../core/theme/app_palette.dart';
 
 class ModernMapPage extends StatefulWidget {
-  const ModernMapPage({super.key});
+  /// False when embedded in MainScreen, which already provides the header.
+  final bool showAppBar;
+
+  const ModernMapPage({super.key, this.showAppBar = true});
 
   @override
   State<ModernMapPage> createState() => _ModernMapPageState();
@@ -21,7 +28,7 @@ class ModernMapPage extends StatefulWidget {
 class _ModernMapPageState extends State<ModernMapPage> {
   late final MapController _mapController;
   late final LocationTrackerController _trackerController;
-  GoogleMapController? _googleMapController;
+  final fm.MapController _osmController = fm.MapController();
   MapLocation? _currentLocation;
   String? _error;
   bool _isLoading = false;
@@ -31,8 +38,8 @@ class _ModernMapPageState extends State<ModernMapPage> {
   bool _showLocationCard = true;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
 
-  static const LatLng _defaultLocation = LatLng(-23.5505, -46.6333);
-  static const double _defaultZoom = 15.0;
+  static const LatLng _defaultLocation = AppMap.defaultCenter;
+  static const double _defaultZoom = AppMap.defaultZoom;
 
   // Map selection mode state
   bool _isSelectionMode = false;
@@ -108,11 +115,10 @@ class _ModernMapPageState extends State<ModernMapPage> {
   }
 
   void _moveCameraToLocation(MapLocation location) {
-    _googleMapController?.animateCamera(
-      CameraUpdate.newLatLngZoom(
-        LatLng(location.latitude, location.longitude),
-        _defaultZoom,
-      ),
+    if (!_mapCreated) return; // controller only usable after onMapReady
+    _osmController.move(
+      LatLng(location.latitude, location.longitude),
+      _defaultZoom,
     );
   }
 
@@ -158,7 +164,7 @@ class _ModernMapPageState extends State<ModernMapPage> {
   @override
   void dispose() {
     _trackerController.removeListener(_onTrackerUpdated);
-    _googleMapController?.dispose();
+    _osmController.dispose();
     for (final s in _subscriptions) {
       s.cancel();
     }
@@ -171,34 +177,50 @@ class _ModernMapPageState extends State<ModernMapPage> {
         ? LatLng(_currentLocation!.latitude, _currentLocation!.longitude)
         : _defaultLocation;
 
+    // Height of the floating nav bar when embedded (Scaffold.extendBody).
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text('Localização'),
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-      ),
+      extendBodyBehindAppBar: widget.showAppBar,
+      appBar: widget.showAppBar
+          ? AppBar(
+              title: const Text('Localização'),
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+            )
+          : null,
       body: Stack(
         children: [
-          GoogleMap(
-            initialCameraPosition: CameraPosition(target: initialLoc, zoom: _defaultZoom),
-            style: _mapStyle,
-            onMapCreated: (c) {
-              _googleMapController = c;
-              setState(() => _mapCreated = true);
-              if (_currentLocation != null) _moveCameraToLocation(_currentLocation!);
-            },
-            onTap: _isSelectionMode ? _onMapTap : null,
-            myLocationButtonEnabled: false,
-            myLocationEnabled: _permissionGranted && _serviceEnabled,
-            markers: _buildMarkers(),
-            mapType: MapType.normal,
-            zoomControlsEnabled: false,
+          fm.FlutterMap(
+            mapController: _osmController,
+            options: fm.MapOptions(
+              initialCenter: initialLoc,
+              initialZoom: _defaultZoom,
+              minZoom: 3,
+              maxZoom: 19,
+              backgroundColor: context.palette.scaffold,
+              interactionOptions: const fm.InteractionOptions(
+                flags: fm.InteractiveFlag.all & ~fm.InteractiveFlag.rotate,
+              ),
+              onMapReady: () {
+                setState(() => _mapCreated = true);
+                if (_currentLocation != null) _moveCameraToLocation(_currentLocation!);
+              },
+              onTap: (_, point) {
+                if (_isSelectionMode) _onMapTap(point);
+              },
+            ),
+            children: [
+              AppMap.tileLayer(context),
+              fm.CircleLayer(circles: _buildRadiusCircles()),
+              fm.MarkerLayer(markers: _buildMarkers()),
+              AppMap.attribution(),
+            ],
           ),
           if (!_mapCreated || _isLoading)
             Container(
-              color: Colors.black.withOpacity(0.5),
-              child: const Center(child: CircularProgressIndicator(color: Colors.cyanAccent)),
+              color: Colors.black.withValues(alpha: 0.5),
+              child: Center(child: CircularProgressIndicator(color: context.palette.accent)),
             ),
           if (_error != null && _currentLocation == null)
             PermissionStateView(
@@ -214,21 +236,21 @@ class _ModernMapPageState extends State<ModernMapPage> {
               right: 0,
               child: SafeArea(
                 child: Container(
-                  margin: const EdgeInsets.fromLTRB(12, 64, 12, 0),
+                  margin: EdgeInsets.fromLTRB(12, widget.showAppBar ? 64 : 12, 12, 0),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.cyanAccent.withOpacity(0.12),
+                    color: context.palette.accent.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.cyanAccent.withOpacity(0.3)),
+                    border: Border.all(color: context.palette.accent.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.touch_app, color: Colors.cyanAccent, size: 18),
+                      Icon(Icons.touch_app, color: context.palette.accent, size: 18),
                       const SizedBox(width: 10),
-                      const Expanded(child: Text('Toque no mapa para escolher um ponto', style: TextStyle(color: Colors.cyanAccent, fontSize: 13))),
+                      Expanded(child: Text('Toque no mapa para escolher um ponto', style: TextStyle(color: context.palette.accent, fontSize: 13))),
                       GestureDetector(
                         onTap: _clearSelectionMode,
-                        child: const Icon(Icons.close, color: Colors.white38, size: 20),
+                        child: Icon(Icons.close, color: context.palette.textPrimary.withValues(alpha: 0.38), size: 20),
                       ),
                     ],
                   ),
@@ -238,21 +260,21 @@ class _ModernMapPageState extends State<ModernMapPage> {
           // Selected pin confirm card
           if (_selectedPin != null)
             Positioned(
-              bottom: 24,
+              bottom: 24 + bottomInset,
               left: 24,
               right: 24,
               child: _buildSelectedPinCard(),
             )
           else if (_currentLocation != null && _showLocationCard && !_isSelectionMode)
             Positioned(
-              bottom: 24,
+              bottom: 24 + bottomInset,
               left: 24,
               right: 24,
               child: _buildLocationCard(_currentLocation!),
             ),
           Positioned(
             right: 24,
-            bottom: (_selectedPin != null || (_currentLocation != null && _showLocationCard && !_isSelectionMode)) ? 200 : 40,
+            bottom: bottomInset + ((_selectedPin != null || (_currentLocation != null && _showLocationCard && !_isSelectionMode)) ? 200 : 40),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -261,12 +283,12 @@ class _ModernMapPageState extends State<ModernMapPage> {
                   FloatingActionButton(
                     heroTag: 'sync_locations',
                     onPressed: _isSyncingLocations ? null : _syncLocationsFromServer,
-                    backgroundColor: const Color(0xFF1E1E1E),
-                    foregroundColor: Colors.greenAccent,
+                    backgroundColor: context.palette.cardElevated,
+                    foregroundColor: context.palette.success,
                     mini: true,
                     tooltip: 'Atualizar locais do servidor',
                     child: _isSyncingLocations
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.greenAccent))
+                        ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.palette.success))
                         : const Icon(Icons.cloud_download_outlined),
                   ),
                   const SizedBox(height: 10),
@@ -274,8 +296,8 @@ class _ModernMapPageState extends State<ModernMapPage> {
                   FloatingActionButton(
                     heroTag: 'select_on_map',
                     onPressed: () => setState(() { _isSelectionMode = true; _showLocationCard = false; }),
-                    backgroundColor: const Color(0xFF1E1E1E),
-                    foregroundColor: Colors.white70,
+                    backgroundColor: context.palette.cardElevated,
+                    foregroundColor: context.palette.textPrimary.withValues(alpha: 0.7),
                     mini: true,
                     tooltip: 'Selecionar ponto no mapa',
                     child: const Icon(Icons.pin_drop_outlined),
@@ -286,8 +308,8 @@ class _ModernMapPageState extends State<ModernMapPage> {
                     FloatingActionButton(
                       heroTag: 'add_location',
                       onPressed: _showAddLocationDialog,
-                      backgroundColor: const Color(0xFF1E1E1E),
-                      foregroundColor: Colors.cyanAccent,
+                      backgroundColor: context.palette.cardElevated,
+                      foregroundColor: context.palette.accent,
                       mini: true,
                       tooltip: 'Catalogar local atual ou pesquisar',
                       child: const Icon(Icons.bookmark_add_outlined),
@@ -298,10 +320,10 @@ class _ModernMapPageState extends State<ModernMapPage> {
                 FloatingActionButton(
                   heroTag: 'my_location',
                   onPressed: _isLoading ? null : () => _mapController.fetchMyLocation(),
-                  backgroundColor: Colors.cyanAccent,
-                  foregroundColor: Colors.black,
+                  backgroundColor: context.palette.accent,
+                  foregroundColor: context.palette.onAccent,
                   child: _isLoading
-                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                    ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: context.palette.onAccent))
                     : const Icon(Icons.my_location),
                 ),
               ],
@@ -316,22 +338,22 @@ class _ModernMapPageState extends State<ModernMapPage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A).withOpacity(0.95),
+        color: context.palette.card.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.cyanAccent.withOpacity(0.3)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 20)],
+        border: Border.all(color: context.palette.accent.withValues(alpha: 0.3)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: context.isDarkTheme ? 0.4 : 0.08), blurRadius: 20)],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
-              const Icon(Icons.pin_drop, color: Colors.cyanAccent, size: 18),
+              Icon(Icons.pin_drop, color: context.palette.accent, size: 18),
               const SizedBox(width: 10),
               Expanded(
                 child: _isResolving
-                  ? const Text('Identificando endereço...', style: TextStyle(color: Colors.white54, fontSize: 13))
-                  : Text(_selectedPinAddress ?? 'Local selecionado', style: const TextStyle(color: Colors.white, fontSize: 13), overflow: TextOverflow.ellipsis),
+                  ? Text('Identificando endereço...', style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.54), fontSize: 13))
+                  : Text(_selectedPinAddress ?? 'Local selecionado', style: TextStyle(color: context.palette.textPrimary, fontSize: 13), overflow: TextOverflow.ellipsis),
               ),
             ],
           ),
@@ -341,14 +363,14 @@ class _ModernMapPageState extends State<ModernMapPage> {
             children: [
               TextButton(
                 onPressed: () => setState(() { _selectedPin = null; _selectedPinAddress = null; }),
-                child: const Text('Limpar pin', style: TextStyle(color: Colors.white38, fontSize: 12)),
+                child: Text('Limpar pin', style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.38), fontSize: 12)),
               ),
               const SizedBox(width: 10),
               ElevatedButton.icon(
                 onPressed: _isResolving ? null : () => _showAddLocationDialog(pin: _selectedPin, pinAddr: _selectedPinAddress),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.cyanAccent,
-                  foregroundColor: Colors.black,
+                  backgroundColor: context.palette.accent,
+                  foregroundColor: context.palette.onAccent,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 ),
@@ -366,11 +388,11 @@ class _ModernMapPageState extends State<ModernMapPage> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A).withOpacity(0.9),
+        color: context.palette.card.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: context.palette.textPrimary.withValues(alpha: 0.1)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 5)),
+          BoxShadow(color: Colors.black.withValues(alpha: context.isDarkTheme ? 0.3 : 0.08), blurRadius: 20, offset: const Offset(0, 5)),
         ],
       ),
       child: Column(
@@ -380,24 +402,24 @@ class _ModernMapPageState extends State<ModernMapPage> {
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: Colors.cyanAccent.withOpacity(0.1), shape: BoxShape.circle),
-                child: const Icon(Icons.location_on, color: Colors.cyanAccent, size: 20),
+                decoration: BoxDecoration(color: context.palette.accent.withValues(alpha: 0.1), shape: BoxShape.circle),
+                child: Icon(Icons.location_on, color: context.palette.accent, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Sua Posição', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text('Sua Posição', style: TextStyle(color: context.palette.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
                     Text(
                       'Lat: ${location.latitude.toStringAsFixed(4)}, Lon: ${location.longitude.toStringAsFixed(4)}',
-                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                      style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.54), fontSize: 12),
                     ),
                   ],
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.close, color: Colors.white38, size: 18),
+                icon: Icon(Icons.close, color: context.palette.textPrimary.withValues(alpha: 0.38), size: 18),
                 onPressed: () => setState(() => _showLocationCard = false),
               ),
             ],
@@ -412,53 +434,58 @@ class _ModernMapPageState extends State<ModernMapPage> {
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Row(
       children: [
-        Icon(icon, size: 14, color: Colors.white38),
+        Icon(icon, size: 14, color: context.palette.textPrimary.withValues(alpha: 0.38)),
         const SizedBox(width: 8),
-        Text('$label: ', style: const TextStyle(color: Colors.white38, fontSize: 11)),
-        Text(value, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+        Text('$label: ', style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.38), fontSize: 11)),
+        Text(value, style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.7), fontSize: 11, fontWeight: FontWeight.bold)),
       ],
     );
   }
 
-  Set<Marker> _buildMarkers() {
-    final markers = <Marker>{};
+  /// Geofence radius around each saved location.
+  List<fm.CircleMarker> _buildRadiusCircles() {
+    return [
+      for (final loc in _trackerController.locations)
+        AppMap.radius(
+          LatLng(loc.latitude, loc.longitude),
+          loc.radiusMeters,
+          context.palette.warning,
+        ),
+    ];
+  }
 
-    // Selection pin (green)
-    if (_selectedPin != null) {
-      markers.add(
-        Marker(
-          markerId: const MarkerId('_selection_pin'),
-          position: _selectedPin!,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-          zIndex: 10,
+  List<fm.Marker> _buildMarkers() {
+    return [
+      // Saved catalog locations (orange) — tap shows name + radius.
+      for (final loc in _trackerController.locations)
+        AppMap.pin(
+          LatLng(loc.latitude, loc.longitude),
+          color: context.palette.warning,
+          onTap: () => _showMarkerInfo(loc.name, 'Raio: ${loc.radiusMeters.toInt()}m'),
+        ),
+
+      // Current location (cyan dot)
+      if (_currentLocation != null && _permissionGranted && _serviceEnabled)
+        AppMap.currentLocation(
+          LatLng(_currentLocation!.latitude, _currentLocation!.longitude),
+          color: context.palette.accent,
+        ),
+
+      // Selection pin (green) — last so it renders on top.
+      if (_selectedPin != null)
+        AppMap.pin(_selectedPin!, color: context.palette.success, size: 48),
+    ];
+  }
+
+  void _showMarkerInfo(String title, String subtitle) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('$title · $subtitle'),
+          duration: const Duration(seconds: 2),
         ),
       );
-    }
-
-    // Saved catalog locations (orange)
-    for (final loc in _trackerController.locations) {
-      markers.add(
-        Marker(
-          markerId: MarkerId(loc.id),
-          position: LatLng(loc.latitude, loc.longitude),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
-          infoWindow: InfoWindow(title: loc.name, snippet: 'Raio: ${loc.radiusMeters.toInt()}m'),
-        ),
-      );
-    }
-
-    // Current Location (cyan)
-    if (_currentLocation != null) {
-      markers.add(
-        Marker(
-          markerId: const MarkerId('me'),
-          position: LatLng(_currentLocation!.latitude, _currentLocation!.longitude),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
-        ),
-      );
-    }
-
-    return markers;
   }
 
   Future<void> _syncLocationsFromServer({bool silent = false}) async {
@@ -480,7 +507,10 @@ class _ModernMapPageState extends State<ModernMapPage> {
 
     try {
       final settingsResult = await DependencyInjection().loadSettings();
-      final serverUrl = settingsResult.valueOrNull?.serverApiUrl ?? '';
+      final configuredUrl = settingsResult.valueOrNull?.serverApiUrl.trim() ?? '';
+      // Fall back to the app-wide server (same one used for questions/answers).
+      final serverUrl =
+          configuredUrl.isNotEmpty ? configuredUrl : AppConfig.serverApiUrl;
 
       if (serverUrl.isEmpty) {
         if (!silent && mounted) {
@@ -512,18 +542,24 @@ class _ModernMapPageState extends State<ModernMapPage> {
         }
       } catch (_) {}
 
-      final added = await _trackerController.syncFromServer(
+      final result = await _trackerController.syncFromServer(
         serverUrl,
         latitude: _currentLocation!.latitude,
         longitude: _currentLocation!.longitude,
         city: city,
       );
       if (!silent && mounted) {
+        final parts = <String>[
+          if (result.added > 0) '${result.added} novo(s)',
+          if (result.updated > 0) '${result.updated} atualizado(s)',
+        ];
+        final where = city != null ? ' em $city' : '';
+        final message = parts.isEmpty
+            ? 'Nenhuma alteração$where (${result.total} local(is) verificado(s)).'
+            : '${parts.join(', ')}$where — serão perguntados novamente ao entrar no raio.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(added > 0
-                ? '$added novo(s) local(is) importado(s) do servidor.'
-                : 'Locais já atualizados.'),
+            content: Text(message),
             backgroundColor: Colors.cyan[700],
           ),
         );
@@ -577,7 +613,4 @@ class _ModernMapPageState extends State<ModernMapPage> {
   String _formatTime(DateTime t) {
     return '${t.hour.toString().padLeft(2,'0')}:${t.minute.toString().padLeft(2,'0')}';
   }
-
-  // Estilo Dark opcional para o mapa (Simplificado para o exemplo)
-  static const String _mapStyle = ''; 
 }

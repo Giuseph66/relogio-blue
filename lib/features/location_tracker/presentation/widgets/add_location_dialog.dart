@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart' as geocoding;
+import '../../../../core/theme/app_palette.dart';
 
 class AddLocationDialog extends StatefulWidget {
   final double? currentLat;
@@ -152,9 +153,9 @@ class _AddLocationDialogState extends State<AddLocationDialog> with SingleTicker
         constraints: const BoxConstraints(maxHeight: 560),
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E),
+          color: context.palette.cardElevated,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white10),
+          border: Border.all(color: context.palette.textPrimary.withValues(alpha: 0.1)),
         ),
         child: Form(
           key: _formKey,
@@ -168,27 +169,27 @@ class _AddLocationDialogState extends State<AddLocationDialog> with SingleTicker
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.cyanAccent.withOpacity(0.1),
+                      color: context.palette.accent.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.add_location_alt, color: Colors.cyanAccent, size: 22),
+                    child: Icon(Icons.add_location_alt, color: context.palette.accent, size: 22),
                   ),
                   const SizedBox(width: 12),
-                  const Text('Catalogar Local', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+                  Text('Catalogar Local', style: TextStyle(color: context.palette.textPrimary, fontSize: 17, fontWeight: FontWeight.bold)),
                 ],
               ),
               const SizedBox(height: 16),
               // Name field
               TextFormField(
                 controller: _nameController,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: context.palette.textPrimary),
                 decoration: InputDecoration(
                   labelText: 'Nome do Local',
-                  labelStyle: const TextStyle(color: Colors.white54),
+                  labelStyle: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.54)),
                   filled: true,
-                  fillColor: Colors.white.withOpacity(0.05),
+                  fillColor: context.palette.textPrimary.withValues(alpha: 0.05),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  prefixIcon: const Icon(Icons.label_outline, color: Colors.white38),
+                  prefixIcon: Icon(Icons.label_outline, color: context.palette.textPrimary.withValues(alpha: 0.38)),
                 ),
                 validator: (val) => val == null || val.trim().isEmpty ? 'Insira um nome' : null,
               ),
@@ -197,14 +198,14 @@ class _AddLocationDialogState extends State<AddLocationDialog> with SingleTicker
               TextFormField(
                 controller: _radiusController,
                 keyboardType: TextInputType.number,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: context.palette.textPrimary),
                 decoration: InputDecoration(
                   labelText: 'Raio (metros)',
-                  labelStyle: const TextStyle(color: Colors.white54),
+                  labelStyle: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.54)),
                   filled: true,
-                  fillColor: Colors.white.withOpacity(0.05),
+                  fillColor: context.palette.textPrimary.withValues(alpha: 0.05),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  prefixIcon: const Icon(Icons.radar, color: Colors.white38),
+                  prefixIcon: Icon(Icons.radar, color: context.palette.textPrimary.withValues(alpha: 0.38)),
                 ),
                 validator: (val) {
                   if (val == null || val.trim().isEmpty) return 'Insira o raio';
@@ -216,15 +217,15 @@ class _AddLocationDialogState extends State<AddLocationDialog> with SingleTicker
               // Source tabs
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.04),
+                  color: context.palette.textPrimary.withValues(alpha: 0.04),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: TabBar(
                   controller: _tabController,
                   indicatorSize: TabBarIndicatorSize.tab,
-                  indicator: BoxDecoration(color: Colors.cyanAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-                  labelColor: Colors.cyanAccent,
-                  unselectedLabelColor: Colors.white38,
+                  indicator: BoxDecoration(color: context.palette.accent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
+                  labelColor: context.palette.accent,
+                  unselectedLabelColor: context.palette.textPrimary.withValues(alpha: 0.38),
                   dividerColor: Colors.transparent,
                   labelStyle: const TextStyle(fontSize: 12),
                   tabs: const [
@@ -254,15 +255,15 @@ class _AddLocationDialogState extends State<AddLocationDialog> with SingleTicker
                 children: [
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Cancelar', style: TextStyle(color: Colors.white38)),
+                    child: Text('Cancelar', style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.38))),
                   ),
                   const SizedBox(width: 12),
                   ElevatedButton(
                     onPressed: _activeSource == null ? null : _submit,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.cyanAccent,
-                      foregroundColor: Colors.black,
-                      disabledBackgroundColor: Colors.white10,
+                      backgroundColor: context.palette.accent,
+                      foregroundColor: context.palette.onAccent,
+                      disabledBackgroundColor: context.palette.textPrimary.withValues(alpha: 0.1),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     child: const Text('Salvar'),
@@ -278,24 +279,24 @@ class _AddLocationDialogState extends State<AddLocationDialog> with SingleTicker
 
   Widget _buildGpsTab() {
     if (widget.currentLat == null) {
-      return const Center(child: Text('GPS indisponível', style: TextStyle(color: Colors.white38)));
+      return Center(child: Text('GPS indisponível', style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.38))));
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(color: Colors.white.withOpacity(0.03), borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(color: context.palette.textPrimary.withValues(alpha: 0.03), borderRadius: BorderRadius.circular(10)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Row(children: [
-            const Icon(Icons.gps_fixed, color: Colors.cyanAccent, size: 14),
+            Icon(Icons.gps_fixed, color: context.palette.accent, size: 14),
             const SizedBox(width: 8),
-            const Text('Posição atual do GPS', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+            Text('Posição atual do GPS', style: TextStyle(color: context.palette.textPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
           ]),
           const SizedBox(height: 4),
           Text(
             'Lat: ${widget.currentLat!.toStringAsFixed(5)}, Lon: ${widget.currentLng!.toStringAsFixed(5)}',
-            style: const TextStyle(color: Colors.white38, fontSize: 11),
+            style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.38), fontSize: 11),
           ),
         ],
       ),
@@ -312,13 +313,13 @@ class _AddLocationDialogState extends State<AddLocationDialog> with SingleTicker
                 height: 42,
                 child: TextField(
                   controller: _searchController,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  style: TextStyle(color: context.palette.textPrimary, fontSize: 13),
                   onSubmitted: (_) => _searchAddress(),
                   decoration: InputDecoration(
                     hintText: 'Ex: Av. Paulista, São Paulo',
-                    hintStyle: const TextStyle(color: Colors.white24, fontSize: 12),
+                    hintStyle: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.24), fontSize: 12),
                     filled: true,
-                    fillColor: Colors.white.withOpacity(0.05),
+                    fillColor: context.palette.textPrimary.withValues(alpha: 0.05),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                   ),
@@ -331,13 +332,13 @@ class _AddLocationDialogState extends State<AddLocationDialog> with SingleTicker
               child: ElevatedButton(
                 onPressed: _isSearching ? null : _searchAddress,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.cyanAccent.withOpacity(0.15),
-                  foregroundColor: Colors.cyanAccent,
+                  backgroundColor: context.palette.accent.withValues(alpha: 0.15),
+                  foregroundColor: context.palette.accent,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 child: _isSearching
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.cyanAccent))
+                  ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.palette.accent))
                   : const Icon(Icons.search, size: 18),
               ),
             ),
@@ -345,17 +346,17 @@ class _AddLocationDialogState extends State<AddLocationDialog> with SingleTicker
         ),
         const SizedBox(height: 8),
         if (_searchError != null)
-          Text(_searchError!, style: const TextStyle(color: Colors.redAccent, fontSize: 11))
+          Text(_searchError!, style: TextStyle(color: context.palette.danger, fontSize: 11))
         else if (_searchResult != null)
           Row(
             children: [
-              const Icon(Icons.check_circle, color: Colors.cyanAccent, size: 14),
+              Icon(Icons.check_circle, color: context.palette.accent, size: 14),
               const SizedBox(width: 6),
-              Expanded(child: Text(_searchResult!.displayAddr, style: const TextStyle(color: Colors.white70, fontSize: 11), overflow: TextOverflow.ellipsis)),
+              Expanded(child: Text(_searchResult!.displayAddr, style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.7), fontSize: 11), overflow: TextOverflow.ellipsis)),
             ],
           )
         else
-          const Text('Digite um endereço e pressione buscar', style: TextStyle(color: Colors.white24, fontSize: 11)),
+          Text('Digite um endereço e pressione buscar', style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.24), fontSize: 11)),
       ],
     );
   }

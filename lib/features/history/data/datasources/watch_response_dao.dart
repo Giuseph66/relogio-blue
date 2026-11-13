@@ -45,11 +45,26 @@ class WatchResponseDao {
     final db = await _db;
     final maps = await db.query(
       'watch_responses',
-      where: "sync_status = ? AND question_status = 'answered'",
-      whereArgs: [SyncStatus.pending.name],
+      // Failed syncs (e.g. offline) are retried too.
+      where: "sync_status IN (?, ?) AND question_status = 'answered'",
+      whereArgs: [SyncStatus.pending.name, SyncStatus.failed.name],
       orderBy: 'timestamp ASC',
     );
     return maps.map(WatchResponse.fromMap).toList();
+  }
+
+  /// Most recent record for [questionId] that has not been answered yet.
+  Future<WatchResponse?> findLatestUnanswered(String questionId) async {
+    final db = await _db;
+    final maps = await db.query(
+      'watch_responses',
+      where: 'question_id = ? AND question_status != ?',
+      whereArgs: [questionId, QuestionStatus.answered.name],
+      orderBy: 'timestamp DESC',
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return WatchResponse.fromMap(maps.first);
   }
 
   Future<void> updateStatus(String id, SyncStatus status) async {

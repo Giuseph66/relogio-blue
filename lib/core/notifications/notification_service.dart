@@ -1,7 +1,7 @@
 import 'dart:io' show Platform;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:permission_handler/permission_handler.dart';
 import '../logger/app_logger.dart';
+import 'question_notification_service.dart';
 
 /// Service for managing local notifications
 class NotificationService {
@@ -17,17 +17,7 @@ class NotificationService {
     if (_initialized) return;
 
     try {
-      // On Android 13+ (API 33), POST_NOTIFICATIONS must be requested at runtime
-      if (Platform.isAndroid) {
-        final status = await Permission.notification.status;
-        if (!status.isGranted) {
-          final result = await Permission.notification.request();
-          AppLogger.info('Permissão de notificação: $result');
-          if (result.isPermanentlyDenied) {
-            AppLogger.warning('Notificações bloqueadas permanentemente pelo usuário');
-          }
-        }
-      }
+      // POST_NOTIFICATIONS (Android 13+) is requested by PermissionGate.
       // Android initialization settings
       const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
       
@@ -48,6 +38,8 @@ class NotificationService {
       final initialized = await _notifications.initialize(
         initSettings,
         onDidReceiveNotificationResponse: _onNotificationTapped,
+        onDidReceiveBackgroundNotificationResponse:
+            onQuestionNotificationBackgroundResponse,
       );
 
       if (initialized == true) {
@@ -76,9 +68,19 @@ class NotificationService {
       enableVibration: false,
     );
 
-    await _notifications
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
+    const questionsChannel = AndroidNotificationChannel(
+      kQuestionsChannelId,
+      kQuestionsChannelName,
+      description: kQuestionsChannelDescription,
+      importance: Importance.high,
+      playSound: true,
+      enableVibration: true,
+    );
+
+    final android = _notifications
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    await android?.createNotificationChannel(channel);
+    await android?.createNotificationChannel(questionsChannel);
   }
 
   /// Show notification when a message is received
@@ -135,6 +137,7 @@ class NotificationService {
   /// Handle notification tap
   void _onNotificationTapped(NotificationResponse response) {
     AppLogger.debug('Notificação tocada: ${response.id}');
+    QuestionNotificationService.handleResponse(response);
     // Could navigate to messages page here if needed
   }
 

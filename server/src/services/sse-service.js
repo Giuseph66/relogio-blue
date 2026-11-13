@@ -28,7 +28,16 @@ function broadcastMessage(message) {
   }
 }
 
+/** Broadcasts a named event (e.g. `response`) to every connected dashboard. */
+function broadcastEvent(event, payload = {}) {
+  const data = `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
+  for (const client of clients) {
+    client.write(data);
+  }
+}
+
 module.exports = {
   registerClient,
   broadcastMessage,
+  broadcastEvent,
 };

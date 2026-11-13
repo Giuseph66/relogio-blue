@@ -6,6 +6,10 @@ class TrackedLocation {
   final double radiusMeters;
   final DateTime createdAt;
 
+  /// Fingerprint of this location + its questions as last synced from the
+  /// server. Null for locations created locally (or synced by older versions).
+  final String? revision;
+
   TrackedLocation({
     required this.id,
     required this.name,
@@ -13,7 +17,20 @@ class TrackedLocation {
     required this.longitude,
     required this.radiusMeters,
     required this.createdAt,
+    this.revision,
   });
+
+  TrackedLocation withRevision(String? revision) {
+    return TrackedLocation(
+      id: id,
+      name: name,
+      latitude: latitude,
+      longitude: longitude,
+      radiusMeters: radiusMeters,
+      createdAt: createdAt,
+      revision: revision,
+    );
+  }
 
   Map<String, dynamic> toJson() {
     return {
@@ -23,6 +40,7 @@ class TrackedLocation {
       'longitude': longitude,
       'radiusMeters': radiusMeters,
       'createdAt': createdAt.toIso8601String(),
+      if (revision != null) 'revision': revision,
     };
   }
 
@@ -36,6 +54,7 @@ class TrackedLocation {
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
           : DateTime.now(),
+      revision: json['revision'] as String?,
     );
   }
 }

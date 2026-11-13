@@ -2,10 +2,32 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import '../../domain/entities/tracked_location.dart';
 import '../../domain/entities/location_visit.dart';
+import '../../domain/entities/location_question.dart';
 import '../../data/repositories/location_tracker_repository.dart';
 import '../../data/datasources/remote_location_data_source.dart';
 import '../../../maps_old/domain/entities/map_location.dart';
 import 'package:uuid/uuid.dart';
+
+/// Outcome of [LocationTrackerController.syncFromServer].
+class LocationSyncResult {
+  /// Locations that did not exist locally.
+  final int added;
+
+  /// Locations whose data or questions changed on the server — their visit was
+  /// cleared, so the question will be asked again on the next entry.
+  final int updated;
+
+  /// Locations returned by the server with no changes.
+  final int unchanged;
+
+  const LocationSyncResult({
+    required this.added,
+    required this.updated,
+    required this.unchanged,
+  });
+
+  int get total => added + updated + unchanged;
+}
 
 class LocationTrackerController extends ChangeNotifier {
   final LocationTrackerRepository _repository;
@@ -66,32 +88,104 @@ class LocationTrackerController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Fetches locations from the server filtered by current position and merges
-  /// with the local catalog. Returns the number of new locations added.
+  /// Re-fetches every location (and its active questions) for the current
+  /// city/position and merges it into the local catalog.
+  ///
+  /// Each server location gets a [TrackedLocation.revision] fingerprint built
+  /// from its own data plus the questions that apply to it. When the
+  /// fingerprint changes, the location is treated as new: its visits are
+  /// cleared so the question is asked again on the next geofence entry.
   /// Throws on network/parse error.
-  Future<int> syncFromServer(
+  Future<LocationSyncResult> syncFromServer(
     String serverUrl, {
     required double latitude,
     required double longitude,
     String? city,
   }) async {
     final dataSource = RemoteLocationDataSource(baseUrl: serverUrl);
-    final serverLocations = await dataSource.fetchLocations(
+    final catalog = await dataSource.fetchCatalog(
       latitude: latitude,
       longitude: longitude,
       city: city,
     );
 
-    final existingIds = _locations.map((l) => l.id).toSet();
-    final newLocations = serverLocations.where((l) => !existingIds.contains(l.id)).toList();
+    var added = 0;
+    var updated = 0;
+    var unchanged = 0;
+    var catalogChanged = false;
+    final resetIds = <String>{};
 
-    if (newLocations.isNotEmpty) {
-      _locations.addAll(newLocations);
-      await _repository.saveLocations(_locations);
-      notifyListeners();
+    for (final serverLoc in catalog.locations) {
+      final revision = _revisionFor(serverLoc, catalog.questions);
+      final fresh = serverLoc.withRevision(revision);
+      final index = _locations.indexWhere((l) => l.id == serverLoc.id);
+
+      if (index == -1) {
+        _locations.add(fresh);
+        added++;
+        catalogChanged = true;
+        continue;
+      }
+
+      final previous = _locations[index];
+      if (previous.revision == revision) {
+        unchanged++;
+        continue;
+      }
+
+      _locations[index] = fresh;
+      catalogChanged = true;
+      if (previous.revision == null) {
+        // Synced before fingerprints existed: just record the baseline,
+        // don't re-ask a question the user may have already answered.
+        unchanged++;
+      } else {
+        updated++;
+        resetIds.add(previous.id);
+      }
     }
 
-    return newLocations.length;
+    if (resetIds.isNotEmpty) {
+      _visits.removeWhere((v) => resetIds.contains(v.locationId));
+      resetIds.forEach(_dwellStartTimes.remove);
+      await _repository.saveVisits(_visits);
+    }
+    if (catalogChanged) {
+      await _repository.saveLocations(_locations);
+    }
+    if (catalogChanged || resetIds.isNotEmpty) notifyListeners();
+
+    return LocationSyncResult(
+      added: added,
+      updated: updated,
+      unchanged: unchanged,
+    );
+  }
+
+  /// Stable fingerprint (FNV-1a 64) of a location + the questions that apply
+  /// to it (its own and the city-wide ones without locationId).
+  String _revisionFor(TrackedLocation loc, List<LocationQuestion> questions) {
+    final relevant = questions
+        .where((q) => q.locationId == null || q.locationId == loc.id)
+        .toList()
+      ..sort((a, b) => a.id.compareTo(b.id));
+
+    final buffer = StringBuffer()
+      ..write('L|${loc.name}|${loc.latitude}|${loc.longitude}|${loc.radiusMeters}');
+    for (final q in relevant) {
+      buffer.write('\nQ|${q.id}|${q.prompt}|${q.updatedAt ?? ''}');
+      for (final o in q.options) {
+        buffer.write('|${o.id}=${o.label}');
+      }
+    }
+
+    var hash = 0xcbf29ce484222325;
+    const prime = 0x100000001b3;
+    for (final unit in buffer.toString().codeUnits) {
+      hash ^= unit;
+      hash = (hash * prime) & 0xFFFFFFFFFFFFFFFF;
+    }
+    return hash.toUnsigned(64).toRadixString(16);
   }
 
   Future<void> clearVisits() async {

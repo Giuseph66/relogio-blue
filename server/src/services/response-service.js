@@ -4,6 +4,7 @@ const { enqueueJob } = require('../repositories/job-repository');
 const { findQuestionIdByPrefix } = require('../repositories/question-repository');
 const { createId, normalizeCity, nowIso, toNullableNumber } = require('../utils/helpers');
 const { HttpError } = require('../utils/http-error');
+const { broadcastEvent } = require('./sse-service');
 
 async function ingestResponse(payload) {
   const deviceId = String(payload.deviceId || '').trim();
@@ -63,6 +64,9 @@ async function ingestResponse(payload) {
       deviceId: response.deviceId,
     },
   });
+
+  // Only a signal: dashboards refetch their own (scoped) data.
+  broadcastEvent('response', { id: response.id, receivedAt: response.receivedAt });
 
   return {
     created: true,

@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart' as fm;
+import 'package:latlong2/latlong.dart';
 import '../../../../core/widgets/app_drawer.dart';
+import '../../../../core/widgets/app_map.dart';
 import '../../../../core/di/dependency_injection.dart';
 import '../../../../core/logger/app_logger.dart';
 import '../controllers/map_controller.dart';
@@ -18,7 +20,7 @@ class MapPage extends StatefulWidget {
 
 class _MapPageState extends State<MapPage> {
   late final MapController _mapController;
-  GoogleMapController? _googleMapController;
+  final fm.MapController _osmController = fm.MapController();
   MapLocation? _currentLocation;
   String? _error;
   bool _isLoading = false;
@@ -29,8 +31,8 @@ class _MapPageState extends State<MapPage> {
   final List<StreamSubscription<dynamic>> _subscriptions = [];
 
   // Default location (São Paulo, Brasil) - usado quando não há localização
-  static const LatLng _defaultLocation = LatLng(-23.5505, -46.6333);
-  static const double _defaultZoom = 15.0;
+  static const LatLng _defaultLocation = AppMap.defaultCenter;
+  static const double _defaultZoom = AppMap.defaultZoom;
 
   @override
   void initState() {
@@ -81,11 +83,10 @@ class _MapPageState extends State<MapPage> {
   }
 
   void _moveCameraToLocation(MapLocation location) {
-    _googleMapController?.animateCamera(
-      CameraUpdate.newLatLngZoom(
-        LatLng(location.latitude, location.longitude),
-        _defaultZoom,
-      ),
+    if (!_mapCreated) return; // controller only usable after onMapReady
+    _osmController.move(
+      LatLng(location.latitude, location.longitude),
+      _defaultZoom,
     );
   }
 
@@ -109,7 +110,7 @@ class _MapPageState extends State<MapPage> {
 
   @override
   void dispose() {
-    _googleMapController?.dispose();
+    _osmController.dispose();
     for (final subscription in _subscriptions) {
       subscription.cancel();
     }
@@ -129,37 +130,28 @@ class _MapPageState extends State<MapPage> {
       drawer: const AppDrawer(),
       body: Stack(
         children: [
-          // GoogleMap widget
-          SizedBox.expand(
-            child: GoogleMap(
-            initialCameraPosition: CameraPosition(
-              target: initialLocation,
-              zoom: _defaultZoom,
+          fm.FlutterMap(
+            mapController: _osmController,
+            options: fm.MapOptions(
+              initialCenter: initialLocation,
+              initialZoom: _defaultZoom,
+              minZoom: 3,
+              maxZoom: 19,
+              backgroundColor: const Color(0xFF0A0A0A),
+              onMapReady: () {
+                _mapCreated = true;
+                AppLogger.info('Mapa (OpenStreetMap) criado com sucesso');
+                if (_currentLocation != null) {
+                  _moveCameraToLocation(_currentLocation!);
+                }
+                if (mounted) setState(() {});
+              },
             ),
-            onMapCreated: (controller) {
-              _googleMapController = controller;
-              _mapCreated = true;
-              AppLogger.info('GoogleMap criado com sucesso');
-              if (_currentLocation != null) {
-                _moveCameraToLocation(_currentLocation!);
-              }
-              if (mounted) {
-                setState(() {});
-              }
-            },
-            onCameraMoveStarted: () {
-              AppLogger.debug('Câmera do mapa começou a se mover');
-            },
-            onCameraIdle: () {
-              AppLogger.debug('Câmera do mapa parou');
-            },
-            myLocationButtonEnabled: false,
-            myLocationEnabled: _permissionGranted && _serviceEnabled,
-            markers: _buildMarkers(),
-            mapType: MapType.normal,
-            zoomControlsEnabled: true,
-            compassEnabled: true,
-            ),
+            children: [
+              AppMap.tileLayer(context),
+              fm.MarkerLayer(markers: _buildMarkers()),
+              AppMap.attribution(),
+            ],
           ),
           if (_error != null && _currentLocation == null)
             PermissionStateView(
@@ -168,49 +160,8 @@ class _MapPageState extends State<MapPage> {
               onOpenSettings: _onOpenSettings,
             ),
           if (!_mapCreated)
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Carregando mapa...',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  const SizedBox(height: 24),
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 24),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.orange),
-                    ),
-                    child: const Column(
-                      children: [
-                        Icon(Icons.warning, color: Colors.orange, size: 32),
-                        SizedBox(height: 8),
-                        Text(
-                          'Se o mapa não aparecer, verifique:',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          '1. API key configurada no AndroidManifest.xml\n'
-                          '2. Maps SDK for Android habilitada no Google Cloud\n'
-                          '3. SHA-1 fingerprint adicionado nas restrições da API key',
-                          style: TextStyle(color: Colors.white70, fontSize: 12),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+            const Center(
+              child: CircularProgressIndicator(),
             ),
           if (_isLoading)
             const Center(
@@ -254,24 +205,14 @@ class _MapPageState extends State<MapPage> {
     );
   }
 
-  Set<Marker> _buildMarkers() {
-    if (_currentLocation == null) {
-      return {};
+  List<fm.Marker> _buildMarkers() {
+    if (_currentLocation == null || !_permissionGranted || !_serviceEnabled) {
+      return const [];
     }
-
-    return {
-      Marker(
-        markerId: const MarkerId('current_location'),
-        position: LatLng(
-          _currentLocation!.latitude,
-          _currentLocation!.longitude,
-        ),
-        infoWindow: const InfoWindow(
-          title: 'Você está aqui',
-          snippet: 'Sua localização atual',
-        ),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+    return [
+      AppMap.currentLocation(
+        LatLng(_currentLocation!.latitude, _currentLocation!.longitude),
       ),
-    };
+    ];
   }
 }

@@ -23,7 +23,7 @@ class AboutPage extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             const Text(
-              'Relógio BLE',
+              'Relógio',
               style: TextStyle(
                 fontSize: 28,
                 color: Colors.white,

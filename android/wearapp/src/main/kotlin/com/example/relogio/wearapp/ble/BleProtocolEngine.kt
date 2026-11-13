@@ -34,7 +34,7 @@ class BleProtocolEngine(
         connected = true
         lastHeartbeatAt = nowProvider()
         enqueueText(if (snapshot.ledEnabled) "LED:ON" else "LED:OFF", updateUi = true)
-        enqueueText("ESP32 conectado", updateUi = true)
+        enqueueText("Relógio conectado", updateUi = true)
     }
 
     fun onBleDisconnected() {
@@ -265,7 +265,7 @@ class BleProtocolEngine(
         )
 
     companion object {
-        const val DEVICE_NAME = "ESP32"
+        const val DEVICE_NAME = "Relogio" // generic name, no hardware model (ASCII for BLE advertising)
         const val SERVICE_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb"
         const val CHARACTERISTIC_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb"
         const val QUESTION_TIMEOUT_MS = 10_000L

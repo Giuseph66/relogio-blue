@@ -48,6 +48,44 @@ class RemoteLocationDataSource {
     return list.map((j) => TrackedLocation.fromJson(j as Map<String, dynamic>)).toList();
   }
 
+  /// Fetches locations AND their active questions in a single resolve call.
+  Future<({List<TrackedLocation> locations, List<LocationQuestion> questions})>
+      fetchCatalog({
+    required double latitude,
+    required double longitude,
+    String? city,
+  }) async {
+    final uri = _buildBaseUri().replace(path: '${_buildBaseUri().path}/api/location/resolve');
+
+    final body = <String, dynamic>{
+      'deviceId': 'mobile-app',
+      'latitude': latitude,
+      'longitude': longitude,
+    };
+    if (city != null && city.isNotEmpty) body['city'] = city;
+
+    final response = await http
+        .post(
+          uri,
+          headers: const {'Content-Type': 'application/json', 'Accept': 'application/json'},
+          body: jsonEncode(body),
+        )
+        .timeout(timeout);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('RemoteLocationDataSource: HTTP ${response.statusCode}');
+    }
+
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final locations = ((decoded['locations'] as List<dynamic>?) ?? [])
+        .map((j) => TrackedLocation.fromJson(j as Map<String, dynamic>))
+        .toList();
+    final questions = ((decoded['questions'] as List<dynamic>?) ?? [])
+        .map((j) => LocationQuestion.fromJson(j as Map<String, dynamic>))
+        .toList();
+    return (locations: locations, questions: questions);
+  }
+
   /// Fetches questions for a specific location/city from the resolve endpoint.
   Future<List<LocationQuestion>> fetchQuestionsForVisit({
     required double latitude,

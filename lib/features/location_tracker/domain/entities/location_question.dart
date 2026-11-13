@@ -18,11 +18,15 @@ class LocationQuestion {
   final String? locationId;
   final List<LocationQuestionOption> options;
 
+  /// Server-side last update timestamp (ISO string), if provided.
+  final String? updatedAt;
+
   const LocationQuestion({
     required this.id,
     required this.prompt,
     this.locationId,
     required this.options,
+    this.updatedAt,
   });
 
   factory LocationQuestion.fromJson(Map<String, dynamic> json) {
@@ -31,6 +35,7 @@ class LocationQuestion {
       id: json['id'] as String,
       prompt: json['prompt'] as String,
       locationId: json['locationId'] as String?,
+      updatedAt: json['updatedAt']?.toString(),
       options: optList
           .map((o) => LocationQuestionOption.fromJson(o as Map<String, dynamic>))
           .toList(),

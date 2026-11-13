@@ -24,6 +24,9 @@ class AuthService {
 
   bool get isAuthenticated => isAuthenticatedNotifier.value;
 
+  /// E-mail of the (single, hardcoded) account.
+  String get email => _email;
+
   /// Restores session from SharedPreferences. Call once at app startup.
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();

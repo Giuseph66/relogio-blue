@@ -49,7 +49,11 @@ class BleSettingsModel extends BleSettings {
       serviceUuid: json['serviceUuid'] as String? ?? BleConstants.defaultServiceUuid,
       writeCharacteristicUuid: json['writeCharacteristicUuid'] as String? ?? BleConstants.defaultWriteCharacteristicUuid,
       notifyCharacteristicUuid: json['notifyCharacteristicUuid'] as String? ?? BleConstants.defaultNotifyCharacteristicUuid,
-      preferredDeviceName: json['preferredDeviceName'] as String? ?? '',
+      // 'ESP32' was the old hard-coded default — treat it as "not set".
+      preferredDeviceName: (() {
+        final name = json['preferredDeviceName'] as String? ?? '';
+        return name == 'ESP32' ? '' : name;
+      })(),
       preferredDeviceId: json['preferredDeviceId'] as String?,
       autoReconnect: json['autoReconnect'] as bool? ?? false,
       enableMockMode: json['enableMockMode'] as bool? ?? false,
@@ -65,9 +69,10 @@ class BleSettingsModel extends BleSettings {
               const [],
       backgroundServiceTitle: json['backgroundServiceTitle'] as String?,
       backgroundServiceText: json['backgroundServiceText'] as String?,
-      serverApiUrl: (json['serverApiUrl'] as String?)?.isNotEmpty == true
-          ? json['serverApiUrl'] as String
-          : AppConfig.serverApiUrl,
+      // Always follow AppConfig: the settings page already saves it on every
+      // save, and a stale stored URL would keep the background service
+      // pointing at the old server.
+      serverApiUrl: AppConfig.serverApiUrl,
     );
   }
 

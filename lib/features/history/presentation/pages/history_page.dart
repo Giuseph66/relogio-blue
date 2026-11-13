@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/entities/watch_response.dart';
 import '../controllers/history_controller.dart';
+import '../../../../core/theme/app_palette.dart';
 
 class HistoryPage extends StatefulWidget {
   final HistoryController controller;
@@ -33,9 +34,9 @@ class _HistoryPageState extends State<HistoryPage> {
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
   Color _syncColor(SyncStatus s) => switch (s) {
-        SyncStatus.pending => Colors.orangeAccent,
-        SyncStatus.synced => Colors.greenAccent,
-        SyncStatus.failed => Colors.redAccent,
+        SyncStatus.pending => context.palette.warning,
+        SyncStatus.synced => context.palette.success,
+        SyncStatus.failed => context.palette.danger,
       };
 
   IconData _syncIcon(SyncStatus s) => switch (s) {
@@ -52,8 +53,8 @@ class _HistoryPageState extends State<HistoryPage> {
 
   Color _questionColor(QuestionStatus s) => switch (s) {
         QuestionStatus.watchOffline => Colors.grey,
-        QuestionStatus.questionSent => Colors.amberAccent,
-        QuestionStatus.answered => Colors.cyanAccent,
+        QuestionStatus.questionSent => context.palette.caution,
+        QuestionStatus.answered => context.palette.accent,
       };
 
   IconData _questionIcon(QuestionStatus s) => switch (s) {
@@ -111,17 +112,17 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 
   Widget _buildEmpty() {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.history_rounded, size: 64, color: Colors.white24),
+          Icon(Icons.history_rounded, size: 64, color: context.palette.textPrimary.withValues(alpha: 0.24)),
           SizedBox(height: 16),
-          Text('Nenhuma visita ainda.', style: TextStyle(color: Colors.white54, fontSize: 16)),
+          Text('Nenhuma visita ainda.', style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.54), fontSize: 16)),
           SizedBox(height: 8),
           Text(
             'Os registros de visita aparecerão aqui.',
-            style: TextStyle(color: Colors.white38, fontSize: 13),
+            style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.38), fontSize: 13),
           ),
         ],
       ),
@@ -136,9 +137,9 @@ class _HistoryPageState extends State<HistoryPage> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
+          color: context.palette.textPrimary.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
+          border: Border.all(color: context.palette.textPrimary.withValues(alpha: 0.1)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -149,8 +150,8 @@ class _HistoryPageState extends State<HistoryPage> {
                 Expanded(
                   child: Text(
                     r.locationName,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.palette.textPrimary,
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
                     ),
@@ -178,12 +179,12 @@ class _HistoryPageState extends State<HistoryPage> {
             // ─── Footer ────────────────────────────────────────────────
             Row(
               children: [
-                const Icon(Icons.access_time, size: 13, color: Colors.white38),
+                Icon(Icons.access_time, size: 13, color: context.palette.textPrimary.withValues(alpha: 0.38)),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
                     _formatDateTime(r.timestamp),
-                    style: const TextStyle(color: Colors.white38, fontSize: 12),
+                    style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.38), fontSize: 12),
                   ),
                 ),
                 // Sync status mini badge
@@ -210,9 +211,9 @@ class _HistoryPageState extends State<HistoryPage> {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: small ? 6 : 10, vertical: small ? 2 : 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.5)),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -235,12 +236,12 @@ class _HistoryPageState extends State<HistoryPage> {
   Widget _infoRow(IconData icon, String text) {
     return Row(
       children: [
-        Icon(icon, size: 14, color: Colors.white54),
+        Icon(icon, size: 14, color: context.palette.textPrimary.withValues(alpha: 0.54)),
         const SizedBox(width: 6),
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
+            style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.7), fontSize: 13),
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -254,7 +255,7 @@ class _HistoryPageState extends State<HistoryPage> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF1E1E2E),
+      backgroundColor: context.palette.cardElevated,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -278,19 +279,19 @@ class _HistoryPageState extends State<HistoryPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E2E),
-        title: const Text('Limpar histórico', style: TextStyle(color: Colors.white)),
-        content: const Text(
+        backgroundColor: context.palette.cardElevated,
+        title: Text('Limpar histórico', style: TextStyle(color: context.palette.textPrimary)),
+        content: Text(
           'Todos os registros locais serão removidos. Continuar?',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.7)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar', style: TextStyle(color: Colors.white54)),
+            child: Text('Cancelar', style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.54))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            style: ElevatedButton.styleFrom(backgroundColor: context.palette.danger),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Limpar'),
           ),
@@ -383,7 +384,7 @@ class _DetailSheetState extends State<_DetailSheet> {
             child: Container(
               width: 40, height: 4,
               decoration: BoxDecoration(
-                color: Colors.white24,
+                color: context.palette.textPrimary.withValues(alpha: 0.24),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -393,8 +394,8 @@ class _DetailSheetState extends State<_DetailSheet> {
           // Location
           Text(
             r.locationName,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: context.palette.textPrimary,
               fontWeight: FontWeight.bold,
               fontSize: 18,
             ),
@@ -402,9 +403,9 @@ class _DetailSheetState extends State<_DetailSheet> {
           const SizedBox(height: 4),
           Text(
             widget.formatDateTime(r.timestamp),
-            style: const TextStyle(color: Colors.white38, fontSize: 13),
+            style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.38), fontSize: 13),
           ),
-          const Divider(color: Colors.white12, height: 28),
+          Divider(color: context.palette.textPrimary.withValues(alpha: 0.12), height: 28),
 
           // Question status
           _row(
@@ -419,7 +420,7 @@ class _DetailSheetState extends State<_DetailSheet> {
           if (r.questionText != null) ...[
             _row(
               icon: Icons.help_outline_rounded,
-              color: Colors.white54,
+              color: context.palette.textPrimary.withValues(alpha: 0.54),
               label: 'Pergunta',
               value: r.questionText!,
             ),
@@ -429,7 +430,7 @@ class _DetailSheetState extends State<_DetailSheet> {
           // Answer
           _row(
             icon: Icons.check_circle_outline_rounded,
-            color: r.answerId != null ? Colors.cyanAccent : Colors.white24,
+            color: r.answerId != null ? context.palette.accent : context.palette.textPrimary.withValues(alpha: 0.24),
             label: 'Resposta do relógio',
             value: r.answerLabel ?? '—',
           ),
@@ -451,7 +452,7 @@ class _DetailSheetState extends State<_DetailSheet> {
               padding: const EdgeInsets.only(bottom: 12),
               child: Text(
                 _feedback!,
-                style: const TextStyle(color: Colors.cyanAccent, fontSize: 13),
+                style: TextStyle(color: context.palette.accent, fontSize: 13),
               ),
             ),
 
@@ -464,7 +465,7 @@ class _DetailSheetState extends State<_DetailSheet> {
                     child: _actionButton(
                       icon: Icons.send_rounded,
                       label: 'Reenviar Pergunta',
-                      color: Colors.amberAccent,
+                      color: context.palette.caution,
                       onPressed: _busy ? null : _doResend,
                     ),
                   ),
@@ -474,7 +475,7 @@ class _DetailSheetState extends State<_DetailSheet> {
                     child: _actionButton(
                       icon: Icons.cloud_upload_rounded,
                       label: 'Sincronizar',
-                      color: Colors.greenAccent,
+                      color: context.palette.success,
                       onPressed: _busy ? null : _doSync,
                     ),
                   ),
@@ -500,9 +501,9 @@ class _DetailSheetState extends State<_DetailSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+              Text(label, style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.38), fontSize: 11)),
               const SizedBox(height: 2),
-              Text(value, style: const TextStyle(color: Colors.white, fontSize: 14)),
+              Text(value, style: TextStyle(color: context.palette.textPrimary, fontSize: 14)),
             ],
           ),
         ),

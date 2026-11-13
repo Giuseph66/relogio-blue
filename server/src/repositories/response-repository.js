@@ -131,7 +131,7 @@ async function listRecentResponsesDetailed(limit = 30) {
              questions.location_id AS locationId,
              locations.name AS locationName,
              responses.answer_id AS answerId,
-             responses.answer_text AS answerText,
+             COALESCE(responses.answer_text, question_options.label) AS answerText,
              responses.city,
              responses.latitude,
              responses.longitude,
@@ -144,6 +144,9 @@ async function listRecentResponsesDetailed(limit = 30) {
       LEFT JOIN devices ON devices.id = responses.device_id
       LEFT JOIN questions ON questions.id = responses.question_id
       LEFT JOIN locations ON locations.id = questions.location_id
+      LEFT JOIN question_options
+        ON question_options.question_id = responses.question_id
+       AND question_options.option_id = responses.answer_id
       ORDER BY responses.received_at DESC
       LIMIT ?
     `,

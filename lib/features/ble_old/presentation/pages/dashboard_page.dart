@@ -549,7 +549,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
       deviceId: deviceId,
       deviceName: settings.preferredDeviceName.isNotEmpty
           ? settings.preferredDeviceName
-          : 'Relógio BLE',
+          : 'Relógio',
       serviceUuid: settings.serviceUuid,
       notifyCharacteristicUuid: settings.notifyCharacteristicUuid,
       serverApiUrl: settings.serverApiUrl,

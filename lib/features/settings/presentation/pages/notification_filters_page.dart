@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/background/ble_foreground_service.dart';
 import '../../../../core/di/dependency_injection.dart';
 import '../../../ble_old/domain/entities/ble_settings.dart';
+import '../../../../core/theme/app_palette.dart';
 
 class NotificationFiltersPage extends StatefulWidget {
   const NotificationFiltersPage({super.key});
@@ -69,32 +70,32 @@ class _NotificationFiltersPageState extends State<NotificationFiltersPage> {
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [
-                const Text(
+                Text(
                   'Escolha quais mensagens do relógio devem aparecer na barra de notificações.',
-                  style: TextStyle(color: Colors.white70),
+                  style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.7)),
                 ),
                 const SizedBox(height: 20),
                 SwitchListTile(
-                  title: const Text(
+                  title: Text(
                     'Notificações de RX',
-                    style: TextStyle(color: Colors.white),
+                    style: TextStyle(color: context.palette.textPrimary),
                   ),
-                  subtitle: const Text(
+                  subtitle: Text(
                     'Liga/desliga as notificações de mensagem do relógio',
-                    style: TextStyle(color: Colors.white70),
+                    style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.7)),
                   ),
                   value: _backgroundNotifyOnRx,
                   onChanged: (value) =>
                       setState(() => _backgroundNotifyOnRx = value),
                 ),
                 SwitchListTile(
-                  title: const Text(
+                  title: Text(
                     'Filtrar mensagens específicas',
-                    style: TextStyle(color: Colors.white),
+                    style: TextStyle(color: context.palette.textPrimary),
                   ),
-                  subtitle: const Text(
+                  subtitle: Text(
                     'Quando ligado, só notifica se bater em algum filtro',
-                    style: TextStyle(color: Colors.white70),
+                    style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.7)),
                   ),
                   value: _backgroundNotifyFilterEnabled,
                   onChanged: (value) =>
@@ -105,10 +106,10 @@ class _NotificationFiltersPageState extends State<NotificationFiltersPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Padrões rápidos',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: context.palette.textPrimary,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -126,10 +127,10 @@ class _NotificationFiltersPageState extends State<NotificationFiltersPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Adicionar filtro customizado',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: context.palette.textPrimary,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -159,18 +160,18 @@ class _NotificationFiltersPageState extends State<NotificationFiltersPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Filtros ativos',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: context.palette.textPrimary,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(height: 10),
                       if (_backgroundNotifyAllowedPatterns.isEmpty)
-                        const Text(
+                        Text(
                           'Nenhum filtro selecionado',
-                          style: TextStyle(color: Colors.white54),
+                          style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.54)),
                         )
                       else
                         Wrap(
@@ -203,9 +204,9 @@ class _NotificationFiltersPageState extends State<NotificationFiltersPage> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
+        color: context.palette.textPrimary.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: context.palette.textPrimary.withValues(alpha: 0.1)),
       ),
       child: child,
     );

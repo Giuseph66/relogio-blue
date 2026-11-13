@@ -5,6 +5,7 @@ import '../../../ble_old/presentation/controllers/messages_controller.dart';
 import '../../../ble_old/presentation/controllers/ble_controller.dart';
 import '../../../ble_old/domain/entities/ble_message.dart';
 import '../../../ble_old/domain/repositories/ble_repository.dart' as ble;
+import '../../../../core/theme/app_palette.dart';
 
 class ModernMessagesPage extends StatefulWidget {
   const ModernMessagesPage({super.key});
@@ -154,7 +155,7 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
           margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.05),
+            color: context.palette.textPrimary.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Row(
@@ -163,7 +164,7 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
                 width: 8,
                 height: 8,
                 decoration: BoxDecoration(
-                  color: isOnline ? Colors.greenAccent : Colors.redAccent,
+                  color: isOnline ? context.palette.success : context.palette.danger,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -171,7 +172,7 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
               Text(
                 isOnline ? 'Conectado' : 'Offline',
                 style: TextStyle(
-                  color: isOnline ? Colors.greenAccent : Colors.redAccent,
+                  color: isOnline ? context.palette.success : context.palette.danger,
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),
@@ -194,12 +195,12 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white10,
+        color: context.palette.textPrimary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         text,
-        style: const TextStyle(color: Colors.white54, fontSize: 10),
+        style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.54), fontSize: 10),
       ),
     );
   }
@@ -222,10 +223,10 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
         }
 
         if (messages.isEmpty) {
-          return const Center(
+          return Center(
             child: Text(
               'Nenhum log disponível',
-              style: TextStyle(color: Colors.white24),
+              style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.24)),
             ),
           );
         }
@@ -262,8 +263,8 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: isRx
-              ? Colors.white.withValues(alpha: 0.08)
-              : Colors.cyanAccent.withValues(alpha: 0.15),
+              ? context.palette.textPrimary.withValues(alpha: 0.08)
+              : context.palette.accent.withValues(alpha: 0.15),
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(20),
             topRight: const Radius.circular(20),
@@ -272,8 +273,8 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
           ),
           border: Border.all(
             color: isRx
-                ? Colors.white10
-                : Colors.cyanAccent.withValues(alpha: 0.3),
+                ? context.palette.textPrimary.withValues(alpha: 0.1)
+                : context.palette.accent.withValues(alpha: 0.3),
           ),
         ),
         child: Column(
@@ -286,12 +287,12 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
                 Icon(
                   isRx ? Icons.south_west : Icons.north_east,
                   size: 10,
-                  color: isRx ? Colors.white38 : Colors.cyanAccent,
+                  color: isRx ? context.palette.textPrimary.withValues(alpha: 0.38) : context.palette.accent,
                 ),
                 const SizedBox(width: 4),
                 Text(
                   _formatTime(message.timestamp),
-                  style: const TextStyle(color: Colors.white24, fontSize: 9),
+                  style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.24), fontSize: 9),
                 ),
               ],
             ),
@@ -303,7 +304,7 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
             else
               Text(
                 message.content,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
+                style: TextStyle(color: context.palette.textPrimary, fontSize: 14),
               ),
           ],
         ),
@@ -317,8 +318,8 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
       children: [
         Text(
           'Pergunta ${prompt.questionId}',
-          style: const TextStyle(
-            color: Colors.cyanAccent,
+          style: TextStyle(
+            color: context.palette.accent,
             fontSize: 11,
             fontWeight: FontWeight.w700,
           ),
@@ -326,7 +327,7 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
         const SizedBox(height: 4),
         Text(
           prompt.question,
-          style: const TextStyle(color: Colors.white, fontSize: 14),
+          style: TextStyle(color: context.palette.textPrimary, fontSize: 14),
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -340,13 +341,13 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
                     vertical: 5,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white10,
+                    color: context.palette.textPrimary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: Colors.white12),
+                    border: Border.all(color: context.palette.textPrimary.withValues(alpha: 0.12)),
                   ),
                   child: Text(
                     '${option.id}: ${option.label}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                    style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.7), fontSize: 11),
                   ),
                 );
               })
@@ -375,10 +376,10 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Resposta do relogio',
             style: TextStyle(
-              color: Colors.greenAccent,
+              color: context.palette.success,
               fontSize: 11,
               fontWeight: FontWeight.w700,
             ),
@@ -388,7 +389,7 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
             prompt == null
                 ? '${result.questionId} -> ${result.answerId}'
                 : '${prompt.question}\n${result.answerId}${optionLabel == null ? '' : ' ($optionLabel)'}',
-            style: const TextStyle(color: Colors.white, fontSize: 14),
+            style: TextStyle(color: context.palette.textPrimary, fontSize: 14),
           ),
         ],
       );
@@ -397,10 +398,10 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Erro de pergunta',
           style: TextStyle(
-            color: Colors.orangeAccent,
+            color: context.palette.warning,
             fontSize: 11,
             fontWeight: FontWeight.w700,
           ),
@@ -408,7 +409,7 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
         const SizedBox(height: 4),
         Text(
           '${result.questionId} -> ${_mapQuestionError(result.errorCode ?? 'UNKNOWN')}',
-          style: const TextStyle(color: Colors.white, fontSize: 14),
+          style: TextStyle(color: context.palette.textPrimary, fontSize: 14),
         ),
       ],
     );
@@ -437,9 +438,9 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  backgroundColor: Colors.white10,
+                  backgroundColor: context.palette.textPrimary.withValues(alpha: 0.1),
                   labelStyle: TextStyle(
-                    color: isConnected ? Colors.white70 : Colors.white30,
+                    color: isConnected ? context.palette.textPrimary.withValues(alpha: 0.7) : context.palette.textPrimary.withValues(alpha: 0.3),
                   ),
                   onPressed: isConnected
                       ? () => _sendMessage(commands[index])
@@ -459,22 +460,22 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
               itemBuilder: (context, index) {
                 if (index == _questionPresets.length) {
                   return ActionChip(
-                    avatar: const Icon(
+                    avatar: Icon(
                       Icons.quiz_outlined,
                       size: 16,
-                      color: Colors.black,
+                      color: context.palette.onAccent,
                     ),
-                    label: const Text(
+                    label: Text(
                       'Nova pergunta',
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
-                        color: Colors.black,
+                        color: context.palette.onAccent,
                       ),
                     ),
                     backgroundColor: isConnected
-                        ? Colors.cyanAccent
-                        : Colors.white12,
+                        ? context.palette.accent
+                        : context.palette.textPrimary.withValues(alpha: 0.12),
                     onPressed: isConnected ? _showQuestionComposer : null,
                   );
                 }
@@ -490,7 +491,7 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
                   ),
                   backgroundColor: Colors.orange.withValues(alpha: 0.18),
                   labelStyle: TextStyle(
-                    color: isConnected ? Colors.orangeAccent : Colors.white30,
+                    color: isConnected ? context.palette.warning : context.palette.textPrimary.withValues(alpha: 0.3),
                   ),
                   onPressed: isConnected
                       ? () => _sendQuestionPreset(preset)
@@ -514,12 +515,12 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
               controller: _messageController,
               onSubmitted: (_) => _sendMessage(),
               enabled: isConnected,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: context.palette.textPrimary),
               decoration: InputDecoration(
                 hintText: 'Enviar comando...',
-                hintStyle: const TextStyle(color: Colors.white30),
+                hintStyle: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.3)),
                 filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.05),
+                fillColor: context.palette.textPrimary.withValues(alpha: 0.05),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
                   borderSide: BorderSide.none,
@@ -537,12 +538,12 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isConnected ? Colors.orangeAccent : Colors.white10,
+                color: isConnected ? context.palette.warning : context.palette.textPrimary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.quiz_outlined,
-                color: isConnected ? Colors.black : Colors.white38,
+                color: isConnected ? context.palette.onAccent : context.palette.textPrimary.withValues(alpha: 0.38),
                 size: 20,
               ),
             ),
@@ -552,13 +553,13 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
             onTap: isConnected ? _sendMessage : null,
             child: Container(
               padding: const EdgeInsets.all(12),
-              decoration: const BoxDecoration(
-                color: Colors.white,
+              decoration: BoxDecoration(
+                color: context.palette.textPrimary,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.send,
-                color: isConnected ? Colors.black : Colors.black38,
+                color: isConnected ? context.palette.onAccent : context.palette.card.withValues(alpha: 0.5),
                 size: 20,
               ),
             ),
@@ -663,10 +664,10 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
           return StatefulBuilder(
             builder: (context, setDialogState) {
               return AlertDialog(
-                backgroundColor: const Color(0xFF161A22),
-                title: const Text(
+                backgroundColor: context.palette.cardElevated,
+                title: Text(
                   'Nova pergunta BLE',
-                  style: TextStyle(color: Colors.white),
+                  style: TextStyle(color: context.palette.textPrimary),
                 ),
                 content: SingleChildScrollView(
                   child: Column(
@@ -674,10 +675,10 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
                     children: [
                       TextField(
                         controller: questionController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(
+                        style: TextStyle(color: context.palette.textPrimary),
+                        decoration: InputDecoration(
                           labelText: 'Pergunta',
-                          labelStyle: TextStyle(color: Colors.white70),
+                          labelStyle: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.7)),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -688,11 +689,11 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
                               flex: 2,
                               child: TextField(
                                 controller: optionLabelControllers[i],
-                                style: const TextStyle(color: Colors.white),
+                                style: TextStyle(color: context.palette.textPrimary),
                                 decoration: InputDecoration(
                                   labelText: 'Opcao ${i + 1}',
-                                  labelStyle: const TextStyle(
-                                    color: Colors.white70,
+                                  labelStyle: TextStyle(
+                                    color: context.palette.textPrimary.withValues(alpha: 0.7),
                                   ),
                                 ),
                               ),
@@ -701,10 +702,10 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
                             Expanded(
                               child: TextField(
                                 controller: optionIdControllers[i],
-                                style: const TextStyle(color: Colors.white),
-                                decoration: const InputDecoration(
+                                style: TextStyle(color: context.palette.textPrimary),
+                                decoration: InputDecoration(
                                   labelText: 'ID',
-                                  labelStyle: TextStyle(color: Colors.white70),
+                                  labelStyle: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.7)),
                                 ),
                               ),
                             ),
@@ -717,8 +718,8 @@ class _ModernMessagesPageState extends State<ModernMessagesPage> {
                           alignment: Alignment.centerLeft,
                           child: Text(
                             errorText!,
-                            style: const TextStyle(
-                              color: Colors.orangeAccent,
+                            style: TextStyle(
+                              color: context.palette.warning,
                               fontSize: 12,
                             ),
                           ),

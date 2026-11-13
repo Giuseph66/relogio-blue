@@ -80,6 +80,59 @@ class WatchResponseRepository {
     }
   }
 
+  /// The watch answered (QANS) while only the background service was alive:
+  /// updates the latest unanswered record for [questionId].
+  Future<bool> markAnsweredByQuestionId({
+    required String questionId,
+    required String answerId,
+    String? serverUrl,
+  }) async {
+    final target = await _dao.findLatestUnanswered(questionId);
+    if (target == null) return false;
+    await markAnswered(id: target.id, answerId: answerId, serverUrl: serverUrl);
+    return true;
+  }
+
+  /// The user answered from the phone notification (quick-reply chip).
+  ///
+  /// Updates the matching unanswered record ([recordId], or the latest one for
+  /// [questionId]). If none exists (e.g. question triggered by the background
+  /// service, which does not persist records), a new answered record is created.
+  Future<WatchResponse?> saveAnswerFromPhone({
+    String? recordId,
+    required String questionId,
+    required String answerId,
+    required String locationId,
+    required String locationName,
+    String? questionCommand,
+    String? serverUrl,
+  }) async {
+    WatchResponse? target;
+    if (recordId != null && recordId.isNotEmpty) {
+      target = await _dao.getById(recordId);
+    }
+    target ??= await _dao.findLatestUnanswered(questionId);
+
+    if (target == null) {
+      return saveResponse(
+        locationId: locationId,
+        locationName: locationName,
+        questionId: questionId,
+        answerId: answerId,
+        serverUrl: serverUrl,
+        questionCommand: questionCommand,
+      );
+    }
+
+    if (target.questionStatus == QuestionStatus.answered) {
+      AppLogger.info('WatchResponseRepository: ${target.id} already answered');
+      return target;
+    }
+
+    await markAnswered(id: target.id, answerId: answerId, serverUrl: serverUrl);
+    return _dao.getById(target.id);
+  }
+
   // ─── Legacy method (kept for compatibility) ───────────────────────────────
 
   Future<WatchResponse> saveResponse({

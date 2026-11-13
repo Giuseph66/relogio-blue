@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { health } = require('../controllers/health-controller');
 const { streamMessages } = require('../controllers/message-controller');
-const { getPublicDashboard } = require('../controllers/public-dashboard-controller');
+const { getPublicDashboard, exportPublicDataset } = require('../controllers/public-dashboard-controller');
 const { asyncHandler } = require('../utils/async-handler');
 const { legacyRoutes } = require('./legacy-routes');
 const { locationRoutes } = require('./location-routes');
@@ -19,6 +19,7 @@ const router = Router();
 router.get('/health', health);
 router.get('/events', asyncHandler(streamMessages));
 router.get('/api/public/dashboard', asyncHandler(getPublicDashboard));
+router.get('/api/public/export/:file', asyncHandler(exportPublicDataset));
 router.use('/admin', adminPageRoutes);
 router.use('/api', legacyRoutes);
 router.use('/api/admin/auth', adminAuthRoutes);

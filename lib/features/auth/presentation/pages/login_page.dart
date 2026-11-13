@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../../core/auth/auth_service.dart';
+import '../../../../core/theme/app_palette.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -50,7 +51,7 @@ class _LoginPageState extends State<LoginPage> {
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF040404),
+      backgroundColor: context.palette.scaffold,
       body: Stack(
         children: [
           // ─── Decorative background elements ─────────────────────────────
@@ -58,7 +59,7 @@ class _LoginPageState extends State<LoginPage> {
             top: -100,
             left: -100,
             child: _BlurredSphere(
-              color: Colors.cyanAccent.withOpacity(0.18),
+              color: context.palette.accent.withValues(alpha: 0.18),
               size: 320,
             ),
           ),
@@ -66,7 +67,7 @@ class _LoginPageState extends State<LoginPage> {
             bottom: -50,
             right: -80,
             child: _BlurredSphere(
-              color: const Color(0xFF00BFFF).withOpacity(0.14),
+              color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.14),
               size: 280,
             ),
           ),
@@ -74,7 +75,7 @@ class _LoginPageState extends State<LoginPage> {
             top: size.height * 0.4,
             right: -120,
             child: _BlurredSphere(
-              color: Colors.cyanAccent.withOpacity(0.08),
+              color: context.palette.accent.withValues(alpha: 0.08),
               size: 200,
             ),
           ),
@@ -105,25 +106,25 @@ class _LoginPageState extends State<LoginPage> {
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.03),
+                          color: context.palette.textPrimary.withValues(alpha: 0.03),
                           border: Border.all(
-                            color: Colors.cyanAccent.withOpacity(0.2),
+                            color: context.palette.accent.withValues(alpha: 0.2),
                             width: 1.5,
                           ),
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.watch_rounded,
                           size: 64,
-                          color: Colors.cyanAccent,
+                          color: context.palette.accent,
                         ),
                       ),
                       const SizedBox(height: 24),
-                      const Text(
+                      Text(
                         'GeoNexo',
                         style: TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.w800,
-                          color: Colors.white,
+                          color: context.palette.textPrimary,
                           letterSpacing: -0.5,
                         ),
                       ),
@@ -131,7 +132,7 @@ class _LoginPageState extends State<LoginPage> {
                       Text(
                         'GeoNexo Admin',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.5),
+                          color: context.palette.textPrimary.withValues(alpha: 0.5),
                           fontSize: 15,
                           letterSpacing: 0.2,
                         ),
@@ -146,10 +147,10 @@ class _LoginPageState extends State<LoginPage> {
                           child: Container(
                             padding: const EdgeInsets.all(32),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.04),
+                              color: context.palette.textPrimary.withValues(alpha: 0.04),
                               borderRadius: BorderRadius.circular(32),
                               border: Border.all(
-                                color: Colors.white.withOpacity(0.08),
+                                color: context.palette.textPrimary.withValues(alpha: 0.08),
                                 width: 1.2,
                               ),
                             ),
@@ -175,7 +176,7 @@ class _LoginPageState extends State<LoginPage> {
                                         _obscure 
                                             ? Icons.visibility_off_outlined
                                             : Icons.visibility_outlined,
-                                        color: Colors.white38,
+                                        color: context.palette.textPrimary.withValues(alpha: 0.38),
                                         size: 20,
                                       ),
                                       onPressed: () => setState(() => _obscure = !_obscure),
@@ -209,7 +210,7 @@ class _LoginPageState extends State<LoginPage> {
                           }
                         },
                         style: TextButton.styleFrom(
-                          foregroundColor: Colors.white38,
+                          foregroundColor: context.palette.textPrimary.withValues(alpha: 0.38),
                           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                         ),
                         child: const Row(
@@ -250,8 +251,8 @@ class _LoginPageState extends State<LoginPage> {
           padding: const EdgeInsets.only(left: 4, bottom: 8),
           child: Text(
             label,
-            style: const TextStyle(
-              color: Colors.white38,
+            style: TextStyle(
+              color: context.palette.textPrimary.withValues(alpha: 0.38),
               fontSize: 13,
               fontWeight: FontWeight.w500,
             ),
@@ -261,24 +262,24 @@ class _LoginPageState extends State<LoginPage> {
           controller: controller,
           obscureText: obscure,
           keyboardType: type,
-          style: const TextStyle(color: Colors.white, fontSize: 15),
+          style: TextStyle(color: context.palette.textPrimary, fontSize: 15),
           decoration: InputDecoration(
-            prefixIcon: Icon(icon, color: Colors.cyanAccent.withOpacity(0.5), size: 20),
+            prefixIcon: Icon(icon, color: context.palette.accent.withValues(alpha: 0.5), size: 20),
             suffixIcon: suffix,
             filled: true,
-            fillColor: Colors.black.withOpacity(0.2),
+            fillColor: Colors.black.withValues(alpha: 0.2),
             contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+              borderSide: BorderSide(color: context.palette.textPrimary.withValues(alpha: 0.1)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+              borderSide: BorderSide(color: context.palette.textPrimary.withValues(alpha: 0.1)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: Colors.cyanAccent, width: 1.5),
+              borderSide: BorderSide(color: context.palette.accent, width: 1.5),
             ),
             errorStyle: const TextStyle(height: 0),
           ),
@@ -303,7 +304,7 @@ class _BlurredSphere extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: RadialGradient(
-          colors: [color, color.withOpacity(0)],
+          colors: [color, color.withValues(alpha: 0)],
         ),
       ),
     );
@@ -322,14 +323,14 @@ class _LoginButton extends StatelessWidget {
       height: 58,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        gradient: const LinearGradient(
-          colors: [Colors.cyanAccent, Color(0xFF00BFFF)],
+        gradient: LinearGradient(
+          colors: [context.palette.accent, Theme.of(context).colorScheme.secondary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.cyanAccent.withOpacity(0.3),
+            color: context.palette.accent.withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -342,18 +343,18 @@ class _LoginButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           child: Center(
             child: loading
-                ? const SizedBox(
+                ? SizedBox(
                     width: 24,
                     height: 24,
                     child: CircularProgressIndicator(
                       strokeWidth: 3,
-                      color: Colors.black,
+                      color: context.palette.onAccent,
                     ),
                   )
-                : const Text(
+                : Text(
                     'ACESSAR PAINEL',
                     style: TextStyle(
-                      color: Colors.black,
+                      color: context.palette.onAccent,
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.2,
@@ -378,18 +379,18 @@ class _ErrorBanner extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.redAccent.withOpacity(0.1),
+          color: context.palette.danger.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.redAccent.withOpacity(0.2)),
+          border: Border.all(color: context.palette.danger.withValues(alpha: 0.2)),
         ),
         child: Row(
           children: [
-            const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 18),
+            Icon(Icons.error_outline_rounded, color: context.palette.danger, size: 18),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 message,
-                style: const TextStyle(color: Colors.redAccent, fontSize: 13),
+                style: TextStyle(color: context.palette.danger, fontSize: 13),
               ),
             ),
           ],
