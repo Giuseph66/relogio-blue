@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:geocoding/geocoding.dart' as geocoding;
+import '../../../../core/location/app_geocoding.dart' as geocoding;
 import '../../../../core/theme/app_palette.dart';
 
 class AddLocationDialog extends StatefulWidget {

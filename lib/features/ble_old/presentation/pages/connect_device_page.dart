@@ -1,5 +1,5 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:app_settings/app_settings.dart';
 import '../../../../core/widgets/app_drawer.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/ble/ble_errors.dart';
@@ -116,7 +116,7 @@ class _ConnectDevicePageState extends State<ConnectDevicePage> with WidgetsBindi
                 fillColor: Colors.white.withOpacity(0.1),
               ),
               style: const TextStyle(color: Colors.white),
-              onChanged: (_) => _startScan(),
+              onChanged: kIsWeb ? null : (_) => _startScan(),
             ),
           ),
           Padding(
@@ -131,7 +131,7 @@ class _ConnectDevicePageState extends State<ConnectDevicePage> with WidgetsBindi
                       foregroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(vertical: 15),
                     ),
-                    child: Text(_isScanning ? 'Parar Busca' : 'Iniciar Busca'),
+                    child: Text(_isScanning ? 'Parar Busca' : (kIsWeb ? 'Selecionar relógio' : 'Iniciar Busca')),
                   ),
                 ),
               ],
@@ -177,7 +177,7 @@ class _ConnectDevicePageState extends State<ConnectDevicePage> with WidgetsBindi
 
   Widget _buildStatusAlert() {
     final messages = <String>[
-      if (!_bluetoothEnabled) 'Bluetooth desligado. Ative para buscar dispositivos.',
+      if (!_bluetoothEnabled) (kIsWeb ? 'Bluetooth web indisponível. Use Chrome no Android e conexão HTTPS.' : 'Bluetooth desligado. Ative para buscar dispositivos.'),
       if (!_permissionsGranted) 'Permissões pendentes. Libere nas configurações do app.',
     ];
 
@@ -186,9 +186,9 @@ class _ConnectDevicePageState extends State<ConnectDevicePage> with WidgetsBindi
     }
 
     final actions = <Widget>[
-      if (!_bluetoothEnabled)
+      if (!_bluetoothEnabled && !kIsWeb)
         OutlinedButton(
-          onPressed: () => AppSettings.openAppSettings(type: AppSettingsType.bluetooth),
+          onPressed: () => PermissionHelper.openBluetoothSettings(),
           style: OutlinedButton.styleFrom(
             foregroundColor: Colors.white,
             side: BorderSide(color: Colors.white.withOpacity(0.6)),

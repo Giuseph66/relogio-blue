@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'dart:isolate';
 import 'dart:ui';
@@ -51,6 +52,7 @@ class VisitQuestionOrchestrator {
   StreamSubscription<List<BleMessage>>? _messageSubscription;
   StreamSubscription<TickStatus>? _tickSubscription;
   ReceivePort? _phoneAnswerPort;
+  StreamSubscription<String>? _webAnswers;
   bool _wasOnline = false;
 
   final QuestionNotificationService _questionNotifications =
@@ -64,6 +66,15 @@ class VisitQuestionOrchestrator {
     _startListeningMessages();
     _startListeningTick();
     _startListeningPhoneAnswers();
+  }
+
+  /// Restore pending watch replies after a PWA reload.
+  Future<void> restorePendingQuestions() async {
+    for (final row in await _responseRepository.getAll()) {
+      if (row.questionStatus != QuestionStatus.questionSent || row.questionCommand == null) continue;
+      final id = _extractCommandId(row.questionCommand!);
+      if (!_pending.containsKey(id)) _registerPending(id, row.id, row.locationId, row.locationName);
+    }
   }
 
   // ─── Listeners ────────────────────────────────────────────────────────────
@@ -121,6 +132,12 @@ class VisitQuestionOrchestrator {
   /// isolate); here we only drop the pending entry so a late watch QANS does
   /// not overwrite it.
   void _startListeningPhoneAnswers() {
+    if (kIsWeb) {
+      _webAnswers = QuestionNotificationService.answers.listen((id) {
+        _pending.remove(id)?.timeoutTimer?.cancel();
+      });
+      return;
+    }
     final port = ReceivePort();
     IsolateNameServer.removePortNameMapping(kQuestionAnswerPortName);
     IsolateNameServer.registerPortWithName(port.sendPort, kQuestionAnswerPortName);
@@ -375,7 +392,8 @@ class VisitQuestionOrchestrator {
     _pending.clear();
     _messageSubscription?.cancel();
     _tickSubscription?.cancel();
-    IsolateNameServer.removePortNameMapping(kQuestionAnswerPortName);
+    _webAnswers?.cancel();
+    if (!kIsWeb) IsolateNameServer.removePortNameMapping(kQuestionAnswerPortName);
     _phoneAnswerPort?.close();
     _phoneAnswerPort = null;
   }

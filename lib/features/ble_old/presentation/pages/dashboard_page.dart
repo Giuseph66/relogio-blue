@@ -1,5 +1,5 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:app_settings/app_settings.dart';
 import '../../../../core/widgets/app_drawer.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/permissions/permission_helper.dart';
@@ -258,7 +258,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
               },
             ),
             const SizedBox(height: 30),
-            _buildBackgroundServiceSection(),
+            if (!kIsWeb) _buildBackgroundServiceSection(),
             const SizedBox(height: 30),
           ],
         ),
@@ -355,7 +355,7 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     final actions = <Widget>[
       if (!_bluetoothEnabled)
         OutlinedButton(
-          onPressed: () => AppSettings.openAppSettings(type: AppSettingsType.bluetooth),
+          onPressed: () => PermissionHelper.openBluetoothSettings(),
           style: OutlinedButton.styleFrom(
             foregroundColor: Colors.white,
             side: BorderSide(color: Colors.white.withOpacity(0.6)),

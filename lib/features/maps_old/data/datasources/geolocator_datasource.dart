@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../../core/logger/app_logger.dart';
 
@@ -36,11 +37,13 @@ class GeolocatorDataSource {
 
   /// Open app settings
   Future<bool> openAppSettings() async {
+    if (kIsWeb) return false;
     return await Geolocator.openAppSettings();
   }
 
   /// Open location settings
   Future<bool> openLocationSettings() async {
+    if (kIsWeb) return false;
     return await Geolocator.openLocationSettings();
   }
 }

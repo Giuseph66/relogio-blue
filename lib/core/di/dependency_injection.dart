@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import '../../../features/ble_old/data/repositories/web_ble_repository.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import '../../../features/ble_old/data/datasources/reactive_ble_datasource.dart';
 import '../../../features/ble_old/data/datasources/preferences_datasource.dart';
@@ -96,14 +98,18 @@ class DependencyInjection {
     final effectiveMockMode = settings.enableMockMode || mockMode;
 
     // Core
-    _ble = FlutterReactiveBle();
-    _bleDataSource = ReactiveBleDataSource(
-      ble: _ble,
-      mockMode: effectiveMockMode,
-    );
+    if (!kIsWeb) {
+      _ble = FlutterReactiveBle();
+      _bleDataSource = ReactiveBleDataSource(
+        ble: _ble,
+        mockMode: effectiveMockMode,
+      );
 
-    // Repositories
-    _bleRepository = BleRepositoryImpl(_bleDataSource);
+      // Repositories
+      _bleRepository = BleRepositoryImpl(_bleDataSource);
+    } else {
+      _bleRepository = WebBleRepository(settings);
+    }
 
     // Use cases
     _startBleScan = StartBleScan(_bleRepository);
@@ -160,7 +166,7 @@ class DependencyInjection {
       tracker: _locationTrackerController,
       orchestrator: _visitQuestionOrchestrator,
     );
-    GeofenceService().start();
+    if (!kIsWeb) GeofenceService().start();
 
     _initialized = true;
   }

@@ -33,7 +33,16 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     await Future.delayed(const Duration(milliseconds: 600));
-    final ok = await AuthService().login(_emailCtrl.text, _passwordCtrl.text);
+    final bool ok;
+    try {
+      ok = await AuthService().login(_emailCtrl.text, _passwordCtrl.text);
+    } catch (_) {
+      if (mounted) setState(() {
+        _loading = false;
+        _errorMsg = 'Não foi possível acessar o servidor. Confira a conexão e tente novamente.';
+      });
+      return;
+    }
 
     if (!mounted) return;
     if (ok) {
@@ -204,7 +213,12 @@ class _LoginPageState extends State<LoginPage> {
                       // ─── Guest Access ─────────────────────────────────────
                       TextButton(
                         onPressed: () async {
-                          await AuthService().logout();
+                          try {
+                            await AuthService().enterAsGuest();
+                          } catch (_) {
+                            if (mounted) setState(() => _errorMsg = 'Não foi possível iniciar o acesso visitante. Confira a conexão.');
+                            return;
+                          }
                           if (context.mounted) {
                             Navigator.of(context).pushReplacementNamed('/dashboard');
                           }

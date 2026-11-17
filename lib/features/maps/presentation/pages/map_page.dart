@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart' as fm;
 import 'package:latlong2/latlong.dart';
-import 'package:geocoding/geocoding.dart' as geocoding;
+import '../../../../core/location/app_geocoding.dart' as geocoding;
 import '../../../../core/config/app_config.dart';
 import '../../../../core/di/dependency_injection.dart';
 import '../../../maps_old/presentation/controllers/map_controller.dart';

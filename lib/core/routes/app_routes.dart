@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import '../auth/auth_service.dart';
 import 'package:flutter/material.dart';
 import '../../features/tela1_old/presentation/pages/tela1_page.dart';
 import '../../features/tela2_old/presentation/pages/tela2_page.dart';
@@ -38,6 +40,9 @@ class AppRoutes {
   static Route<dynamic> generateRoute(RouteSettings routeSettings) {
     final isModernUi = UiModeManager().isModernUi;
     final routeName = routeSettings.name ?? home;
+    if (kIsWeb && !AuthService().hasAppSession && routeName != home && routeName != login) {
+      return MaterialPageRoute(builder: (_) => const LoginPage(), settings: routeSettings);
+    }
     
     // Início (agora é Login)
     if (routeName == home || routeName == login) {

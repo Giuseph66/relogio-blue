@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding;
 import '../../../../core/di/dependency_injection.dart';
@@ -81,7 +82,7 @@ class BleController {
     });
 
     _startStatusTimer();
-    _attemptAutoReconnectOnStart();
+    if (!kIsWeb) _attemptAutoReconnectOnStart();
   }
 
   /// Request permissions
@@ -112,23 +113,25 @@ class BleController {
   Future<void> startScan({String? filterByName}) async {
     if (_isScanning) return;
 
-    final hasPermissions = await PermissionHelper.checkBlePermissions();
-    if (!hasPermissions) {
-      final granted = await requestPermissions();
-      if (!granted) {
-        _scanResultsController.addError(PermissionsNotGrantedError());
+    if (!kIsWeb) {
+      final hasPermissions = await PermissionHelper.checkBlePermissions();
+      if (!hasPermissions) {
+        final granted = await requestPermissions();
+        if (!granted) {
+          _scanResultsController.addError(PermissionsNotGrantedError());
+          _isScanningController.add(false);
+          return;
+        }
+      }
+
+      await refreshStatus();
+      if (!_lastBluetoothEnabled) {
+        _scanResultsController.addError(BluetoothDisabledError());
         _isScanningController.add(false);
         return;
       }
-    }
 
-    await refreshStatus();
-    if (!_lastBluetoothEnabled) {
-      _scanResultsController.addError(BluetoothDisabledError());
-      _isScanningController.add(false);
-      return;
     }
-
     _isScanning = true;
     _isScanningController.add(true);
     _devices.clear();
@@ -146,6 +149,10 @@ class BleController {
               _devices.add(device);
             }
             _scanResultsController.add(List.unmodifiable(_devices));
+          },
+          onDone: () {
+            _isScanning = false;
+            _isScanningController.add(false);
           },
           onError: (error) {
             _isScanning = false;

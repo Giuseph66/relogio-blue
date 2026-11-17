@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:geocoding/geocoding.dart' as geocoding;
+import '../location/app_geocoding.dart' as geocoding;
 
 import '../logger/app_logger.dart';
 import '../../features/maps_old/domain/entities/map_location.dart';
@@ -28,6 +28,7 @@ class GeofenceService {
   Timer? _timer;
   String? _lastCity;
   bool _running = false;
+  bool _polling = false;
 
   void init({
     required GetCurrentLocation getLocation,
@@ -40,9 +41,10 @@ class GeofenceService {
   }
 
   /// Start GPS polling. Safe to call multiple times.
-  void start() {
+  void start({bool pollImmediately = false}) {
     if (_running) return;
     _running = true;
+    if (pollImmediately) unawaited(_tick());
     _timer = Timer.periodic(pollInterval, (_) => _tick());
     AppLogger.info('GeofenceService: started (interval=${pollInterval.inSeconds}s)');
   }
@@ -68,6 +70,8 @@ class GeofenceService {
   // ─── Internal ─────────────────────────────────────────────────────────────
 
   Future<void> _tick() async {
+    if (_polling) return;
+    _polling = true;
     try {
       final location = await _getLocation();
       // Reverse geocode lazily (only when city is stale / first tick).
@@ -77,6 +81,8 @@ class GeofenceService {
       _checkGeofence(location);
     } catch (e) {
       AppLogger.debug('GeofenceService: tick error: $e');
+    } finally {
+      _polling = false;
     }
   }
 

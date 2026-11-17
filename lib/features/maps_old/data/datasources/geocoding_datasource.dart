@@ -1,4 +1,4 @@
-import 'package:geocoding/geocoding.dart' as geocoding;
+import '../../../../core/location/app_geocoding.dart' as geocoding;
 import '../../../../core/logger/app_logger.dart';
 
 /// Data source for geocoding using geocoding package

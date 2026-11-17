@@ -49,6 +49,7 @@ module.exports = {
   PORT: Number(process.env.PORT || 3001),
   DB_PATH: process.env.DB_PATH || path.join(DATA_DIR, 'app.db'),
   PUBLIC_DIR: path.join(ROOT_DIR, 'public'),
+  PWA_DIR: path.resolve(process.env.PWA_DIR || path.join(ROOT_DIR, 'public', 'app')),
   VIEWS_DIR,
   APP_AUTH_TOKEN: process.env.APP_AUTH_TOKEN || 'dev-mobile-token',
   INTERNAL_AUTH_TOKEN: process.env.INTERNAL_AUTH_TOKEN || 'dev-internal-token',

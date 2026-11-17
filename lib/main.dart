@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'core/widgets/web_app_shell.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
 import 'core/routes/app_routes.dart';
@@ -51,10 +53,17 @@ class MyApp extends StatelessWidget {
             darkTheme: AppTheme.darkTheme,
             // Legacy UI screens are dark-only (hard-coded colors).
             themeMode: isModernUi ? themeMode : ThemeMode.dark,
-            initialRoute: AppRoutes.dashboard,
+            initialRoute: kIsWeb ? null : AppRoutes.dashboard,
+            onGenerateInitialRoutes: kIsWeb ? (route) => [
+              AppRoutes.generateRoute(RouteSettings(name: AuthService().hasAppSession
+                  ? (route == '/' ? AppRoutes.dashboard : route)
+                  : AppRoutes.login)),
+            ] : null,
             onGenerateRoute: AppRoutes.generateRoute,
             // Blocks every route until all required permissions are granted.
-            builder: (context, child) => PermissionGate(
+            builder: (context, child) => kIsWeb
+                ? Overlay.wrap(child: WebAppShell(child: child ?? const SizedBox.shrink()))
+                : PermissionGate(
               onAllGranted: _startBackgroundWork,
               child: child ?? const SizedBox.shrink(),
             ),

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../../core/widgets/app_drawer.dart';
 import '../../../../core/di/dependency_injection.dart';
@@ -157,7 +158,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   style: TextStyle(color: Colors.white70),
                 ),
                 value: _keepServiceWhenAppClosed,
-                onChanged: (value) => setState(() => _keepServiceWhenAppClosed = value),
+                onChanged: kIsWeb ? null : (value) => setState(() => _keepServiceWhenAppClosed = value),
               ),
               SwitchListTile(
                 title: const Text('Modo Simulado', style: TextStyle(color: Colors.white)),
@@ -185,7 +186,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   style: TextStyle(color: Colors.white70),
                 ),
                 value: _keepBleAliveInBackground,
-                onChanged: (value) => setState(() => _keepBleAliveInBackground = value),
+                onChanged: kIsWeb ? null : (value) => setState(() => _keepBleAliveInBackground = value),
               ),
               SwitchListTile(
                 title: const Text('Notificar ao receber mensagem', style: TextStyle(color: Colors.white)),

@@ -115,3 +115,66 @@ O app usa [`flutter_map`](https://pub.dev/packages/flutter_map) em vez do Google
 
 *   **Display Branco/Preto:** Verifique se os pinos SPI (18 e 23) não estão invertidos e se a configuração `User_Setup.h` da biblioteca `TFT_eSPI` está correta para o driver GC9A01.
 *   **Não encontra Bluetooth:** Verifique se o app tem permissão de "Dispositivos Próximos" e "Localização" no Android.
+
+## Instalação como PWA
+
+O mesmo projeto mantém o app Android e oferece a versão web em `/app/`.
+No navegador, BLE usa Web Bluetooth, histórico/respostas usam IndexedDB e
+perguntas podem ser respondidas dentro do aplicativo, mesmo sem relógio.
+
+### Gerar e servir
+
+```bash
+python3 scripts/build_pwa.py
+cd server
+PWA_DIR="$(pwd)/../build/web" npm start
+```
+
+Abra `http://localhost:3001/app/` no computador. Para acesso pelo celular,
+publique **servidor e PWA no mesmo domínio HTTPS**, com proxy reverso para Node.
+`localhost` é uma exceção de desenvolvimento; um IP HTTP na rede local não
+habilita Bluetooth nem todos os recursos de localização do navegador.
+O painel existente continua em `/` e `/admin`; a PWA fica em `/app/`.
+
+Em produção, copie **todo** `build/web/` para `server/public/app/`, ou defina
+`PWA_DIR` para o diretório publicado. Faça a troca dos arquivos de forma atômica.
+Não use apenas `flutter build web`: o script também prepara o cache offline
+com hashes de todos os recursos, inclusive o renderer local do Flutter.
+Arquivos ausentes retornam 404 e respostas da API não entram no cache HTTP da PWA.
+
+Visitantes recebem uma sessão própria, sem acesso administrativo.
+O login web usa `ADMIN_EMAIL` e `ADMIN_PASSWORD` do servidor e cookie HttpOnly.
+Configure credenciais e `ADMIN_COOKIE_SECRET` próprios no ambiente de produção.
+O token compartilhado do APK não é incluído no cliente web.
+Para consulta de endereços, o servidor usa `NOMINATIM_BASE_URL`, cache e fila
+de até uma requisição por segundo. O mapa continua exigindo internet para tiles.
+
+### No celular
+
+1. Abra `https://SEU-DOMINIO/app/` e faça login ou entre como visitante.
+2. Toque em **Instalar** ou use **Adicionar à Tela de Início** no navegador.
+3. Toque em **Ativar localização** para monitorar visitas com o app aberto.
+4. Em **Dispositivos**, toque em **Selecionar relógio**, escolha o BLE no seletor
+   do navegador e depois **Conectar**. Use Chrome no Android para essa função.
+5. Perguntas aparecem na PWA com botões de resposta; respostas ficam locais
+   quando offline e são sincronizadas ao recuperar a conexão ou voltar ao app.
+6. Quando houver nova versão pronta, toque em **Atualizar**.
+
+Após o primeiro carregamento online e a instalação do cache, a interface e os
+dados já armazenados podem abrir offline. Um login anterior é necessário para
+acesso offline; login novo exige servidor. Preserve os dados do site: removê-los
+também remove respostas ainda não sincronizadas. Android e navegador têm bases
+locais independentes; não existe importação automática dos dados do APK.
+
+### Limites de plataforma
+
+Instalar a PWA não concede serviço nativo de segundo plano. Monitoramento de
+visitas e BLE precisam do app visível; o navegador pode interrompê-los ao bloquear
+a tela ou fechar/minimizar o app. Ao retornar, o monitoramento ativado retoma.
+Safari/iPhone não oferece Web Bluetooth; mapas, catálogo, histórico e respostas
+no celular continuam disponíveis. Notificações web são opcionais e não mantêm
+GPS/BLE em execução. O Android nativo conserva seus serviços existentes.
+
+Validação física necessária antes da distribuição: parear o relógio real,
+enviar `QST`, receber `QANS`, testar reconexão, visita, perda de internet e
+sincronização. Testes de navegador não comprovam compatibilidade de hardware.

@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../../core/config/app_config.dart';
-import '../../../../core/database/app_database.dart';
 import '../../data/datasources/watch_response_dao.dart';
 import '../../data/repositories/watch_response_repository.dart';
 import '../../domain/entities/watch_response.dart';
@@ -22,7 +21,7 @@ class HistoryController extends ChangeNotifier {
     WatchResponseDao? dao,
     WatchResponseRepository? repository,
     required VisitQuestionOrchestrator orchestrator,
-  })  : _dao = dao ?? WatchResponseDao(appDb: AppDatabase()),
+  })  : _dao = dao ?? WatchResponseDao(),
         _repository = repository ?? WatchResponseRepository(),
         _orchestrator = orchestrator;
 

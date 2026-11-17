@@ -1,5 +1,5 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:app_settings/app_settings.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/permissions/permission_helper.dart';
 import '../../../../core/ble/ble_errors.dart';
@@ -140,6 +140,7 @@ class _ModernConnectDevicePageState extends State<ModernConnectDevicePage> with 
             },
           ),
           IconButton(
+            tooltip: kIsWeb ? 'Selecionar relógio' : 'Iniciar busca',
             iconSize: 64,
             icon: Icon(
               _isScanning ? Icons.stop_circle : Icons.play_circle_fill,
@@ -150,7 +151,7 @@ class _ModernConnectDevicePageState extends State<ModernConnectDevicePage> with 
           Positioned(
             bottom: 10,
             child: Text(
-              _isScanning ? 'Procurando...' : 'Iniciar Busca',
+              _isScanning ? 'Procurando...' : (kIsWeb ? 'Selecionar relógio' : 'Iniciar Busca'),
               style: TextStyle(color: context.palette.textPrimary.withValues(alpha: 0.7), fontSize: 12),
             ),
           ),
@@ -164,7 +165,7 @@ class _ModernConnectDevicePageState extends State<ModernConnectDevicePage> with 
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       child: TextField(
         controller: _filterController,
-        onChanged: (_) => _startScan(),
+        onChanged: kIsWeb ? null : (_) => _startScan(),
         style: TextStyle(color: context.palette.textPrimary),
         decoration: InputDecoration(
           hintText: 'Filtrar dispositivos...',
@@ -240,7 +241,7 @@ class _ModernConnectDevicePageState extends State<ModernConnectDevicePage> with 
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('${rssi}dBm', style: TextStyle(color: signalColor, fontSize: 10)),
+            Text(kIsWeb ? 'BLE' : '${rssi}dBm', style: TextStyle(color: signalColor, fontSize: 10)),
             const SizedBox(width: 8),
             ElevatedButton(
               onPressed: () => _connectToDevice(device),
@@ -260,7 +261,7 @@ class _ModernConnectDevicePageState extends State<ModernConnectDevicePage> with 
 
   Widget _buildStatusAlert() {
     final messages = <String>[
-      if (!_bluetoothEnabled) 'Bluetooth desligado. Ative para buscar dispositivos.',
+      if (!_bluetoothEnabled) (kIsWeb ? 'Bluetooth web indisponível. Use Chrome no Android e conexão HTTPS.' : 'Bluetooth desligado. Ative para buscar dispositivos.'),
       if (!_permissionsGranted) 'Permissões pendentes. Libere nas configurações do app.',
     ];
 
@@ -269,9 +270,9 @@ class _ModernConnectDevicePageState extends State<ModernConnectDevicePage> with 
     }
 
     final actions = <Widget>[
-      if (!_bluetoothEnabled)
+      if (!_bluetoothEnabled && !kIsWeb)
         OutlinedButton(
-          onPressed: () => AppSettings.openAppSettings(type: AppSettingsType.bluetooth),
+          onPressed: () => PermissionHelper.openBluetoothSettings(),
           style: OutlinedButton.styleFrom(
             foregroundColor: context.palette.textPrimary,
             side: BorderSide(color: context.palette.textPrimary.withValues(alpha: 0.6)),

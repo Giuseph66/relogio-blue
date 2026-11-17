@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:ui';
 
@@ -148,6 +150,22 @@ class QuestionNotificationService {
   factory QuestionNotificationService() => _instance;
   QuestionNotificationService._internal();
 
+  static final pendingQuestions = ValueNotifier<List<QuestionNotificationPayload>>([]);
+  static final _answers = StreamController<String>.broadcast();
+  static Stream<String> get answers => _answers.stream;
+
+  static Future<void> answerFromWeb(QuestionNotificationPayload payload, String answerId) async {
+    if (!payload.options.any((option) => option.id == answerId)) return;
+    final saved = await WatchResponseRepository().saveAnswerFromPhone(
+      recordId: payload.recordId, questionId: payload.questionId, answerId: answerId,
+      locationId: payload.locationId, locationName: payload.locationName,
+      questionCommand: payload.command, serverUrl: AppConfig.serverApiUrl,
+    );
+    if (saved == null) throw StateError('A pergunta já foi respondida ou não está disponível.');
+    await QuestionNotificationService().cancelQuestion(payload.questionId);
+    _answers.add(payload.questionId);
+  }
+
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
@@ -165,6 +183,12 @@ class QuestionNotificationService {
 
   Future<void> showQuestion(QuestionNotificationPayload payload) async {
     if (payload.options.length < bleQuestionMinOptions) return;
+    if (kIsWeb) {
+      pendingQuestions.value = [
+        ...pendingQuestions.value.where((p) => p.questionId != payload.questionId), payload,
+      ];
+      return;
+    }
 
     try {
       await NotificationService().init();
@@ -219,6 +243,10 @@ class QuestionNotificationService {
   }
 
   Future<void> cancelQuestion(String questionId) async {
+    if (kIsWeb) {
+      pendingQuestions.value = pendingQuestions.value.where((p) => p.questionId != questionId).toList();
+      return;
+    }
     try {
       await _plugin.cancel(notificationIdFor(questionId));
     } catch (e) {

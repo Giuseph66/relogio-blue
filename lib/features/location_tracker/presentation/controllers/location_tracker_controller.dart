@@ -179,11 +179,20 @@ class LocationTrackerController extends ChangeNotifier {
       }
     }
 
-    var hash = 0xcbf29ce484222325;
+    if (kIsWeb) {
+      var hash = BigInt.parse('cbf29ce484222325', radix: 16);
+      final prime = BigInt.parse('100000001b3', radix: 16);
+      final mask = (BigInt.one << 64) - BigInt.one;
+      for (final unit in buffer.toString().codeUnits) {
+        hash = ((hash ^ BigInt.from(unit)) * prime) & mask;
+      }
+      return hash.toRadixString(16);
+    }
+    var hash = int.parse('0xcbf29ce484222325');
     const prime = 0x100000001b3;
     for (final unit in buffer.toString().codeUnits) {
       hash ^= unit;
-      hash = (hash * prime) & 0xFFFFFFFFFFFFFFFF;
+      hash = (hash * prime) & -1;
     }
     return hash.toUnsigned(64).toRadixString(16);
   }

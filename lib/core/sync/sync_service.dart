@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import '../auth/auth_service.dart';
 import 'dart:async';
 
 import '../logger/app_logger.dart';
@@ -28,6 +30,7 @@ class SyncService {
     _sub?.cancel();
     _sub = _connectivity.isOnline.listen((online) async {
       if (!online || _isSyncing) return;
+      if (kIsWeb && !AuthService().hasAppSession) return;
       final url = _serverUrlProvider();
       if (url.isEmpty) return;
       _isSyncing = true;

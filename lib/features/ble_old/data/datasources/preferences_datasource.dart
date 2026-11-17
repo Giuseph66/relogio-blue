@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import '../../../../core/platform/browser_bridge.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/logger/app_logger.dart';
@@ -57,6 +59,7 @@ class PreferencesDataSource {
       // Mark the saved URL as the new "user-chosen" baseline so it won't be
       // overridden on next load unless AppConfig changes again.
       await prefs.setString(_keyLastConfigServerUrl, AppConfig.serverApiUrl);
+      if (kIsWeb && success) await BrowserBridge.call('ble.configure', {'service': settings.serviceUuid});
       AppLogger.debug('Configurações salvas: $success');
       return success;
     } catch (e) {

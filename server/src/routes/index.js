@@ -13,6 +13,8 @@ const { adminRoutes } = require('./admin-routes');
 const { adminDashboardRoutes } = require('./admin-dashboard-routes');
 const { discoveryRoutes } = require('./discovery-routes');
 const { internalRoutes } = require('./internal-routes');
+const { appSessionRoutes } = require('./app-session-routes');
+const { geocodingRoutes } = require('./geocoding-routes');
 
 const router = Router();
 
@@ -23,7 +25,9 @@ router.get('/api/public/export/:file', asyncHandler(exportPublicDataset));
 router.use('/admin', adminPageRoutes);
 router.use('/api', legacyRoutes);
 router.use('/api/admin/auth', adminAuthRoutes);
+router.use('/api/app/auth', appSessionRoutes);
 router.use('/api/location', locationRoutes);
+router.use('/api/geocoding', geocodingRoutes);
 router.use('/api/responses', responseRoutes);
 router.use('/api/sync', syncRoutes);
 router.use('/api/admin', adminRoutes);

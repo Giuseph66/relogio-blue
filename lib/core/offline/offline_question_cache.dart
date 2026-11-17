@@ -1,10 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
-import 'package:path/path.dart' as p;
-import 'package:sqflite/sqflite.dart';
+import 'bundle_storage.dart';
 
 import '../../features/location_tracker/domain/entities/location_question.dart';
 import '../config/app_config.dart';
@@ -65,21 +63,18 @@ class OfflineQuestionCache {
   factory OfflineQuestionCache() => _instance;
   OfflineQuestionCache._internal();
 
-  static const String _fileName = 'offline_bundle.json';
+  final _storage = BundleStorage();
 
   List<CachedLocation> _locations = const [];
   List<_CachedQuestion> _questions = const [];
   DateTime? _fetchedAt;
-  DateTime? _fileStamp;
 
   DateTime? get fetchedAt => _fetchedAt;
 
-  Future<File> _file() async =>
-      File(p.join(await getDatabasesPath(), _fileName));
-
   /// Downloads the bundle from the server. Returns false when offline/failed
   /// (the previous cache stays untouched).
-  Future<bool> refresh({String baseUrl = AppConfig.serverApiUrl}) async {
+  Future<bool> refresh({String? baseUrl}) async {
+    baseUrl ??= AppConfig.serverApiUrl;
     try {
       final uri = Uri.parse('${_normalize(baseUrl)}/api/location/offline-bundle');
       final response = await http.get(
@@ -102,14 +97,8 @@ class OfflineQuestionCache {
         'questions': decoded['questions'] ?? const [],
       };
 
-      // Write atomically so another isolate never reads a half-written file.
-      final file = await _file();
-      final tmp = File('${file.path}.tmp');
-      await tmp.writeAsString(jsonEncode(stored), flush: true);
-      await tmp.rename(file.path);
-
+      await _storage.write(jsonEncode(stored));
       _apply(stored);
-      _fileStamp = await file.lastModified();
       AppLogger.info(
         'OfflineCache: refreshed (${_locations.length} locais, ${_questions.length} perguntas)',
       );
@@ -133,13 +122,9 @@ class OfflineQuestionCache {
   /// Loads the file into memory, re-reading it when another isolate updated it.
   Future<void> load() async {
     try {
-      final file = await _file();
-      if (!await file.exists()) return;
-      final stamp = await file.lastModified();
-      if (_fileStamp != null && !stamp.isAfter(_fileStamp!)) return;
-      final decoded = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-      _apply(decoded);
-      _fileStamp = stamp;
+      final raw = await _storage.read();
+      if (raw == null) return;
+      _apply(jsonDecode(raw) as Map<String, dynamic>);
     } catch (e) {
       AppLogger.warning('OfflineCache: load failed: $e');
     }

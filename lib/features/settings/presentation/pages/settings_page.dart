@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -411,7 +412,7 @@ class _ModernSettingsPageState extends State<ModernSettingsPage> {
                     ),
                   ],
                 ),
-                SettingsSection(
+                if (!kIsWeb) SettingsSection(
                   title: 'Segundo plano',
                   footer:
                       'Necessário para receber perguntas no relógio com a tela desligada.',
@@ -498,7 +499,7 @@ class _ModernSettingsPageState extends State<ModernSettingsPage> {
                             size: 18, color: context.palette.textPrimary.withValues(alpha: 0.3)),
                         onTap: () async {
                           await Clipboard.setData(
-                            const ClipboardData(text: AppConfig.serverApiUrl),
+                            ClipboardData(text: AppConfig.serverApiUrl),
                           );
                           if (mounted) _toast('Endereço copiado');
                         },

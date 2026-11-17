@@ -1,9 +1,16 @@
+import 'package:flutter/foundation.dart';
+import 'package:app_settings/app_settings.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 import '../logger/app_logger.dart';
 
 class PermissionHelper {
+  static Future<void> openBluetoothSettings() async {
+    if (!kIsWeb) await AppSettings.openAppSettings(type: AppSettingsType.bluetooth);
+  }
+
   /// Request BLE permissions (Android 12+)
   static Future<bool> requestBlePermissions() async {
+    if (kIsWeb) return true;
     try {
       AppLogger.debug('Solicitando permissões BLE...');
       
@@ -33,6 +40,7 @@ class PermissionHelper {
   
   /// Check if BLE permissions are granted
   static Future<bool> checkBlePermissions() async {
+    if (kIsWeb) return true;
     try {
       // Android 12+ (API 31+)
       final bluetoothScan = await ph.Permission.bluetoothScan.status;
@@ -53,6 +61,7 @@ class PermissionHelper {
   
   /// Request all app permissions: BLE, location and notifications
   static Future<void> requestAllPermissions() async {
+    if (kIsWeb) return;
     try {
       await [
         ph.Permission.bluetoothScan,
@@ -81,6 +90,7 @@ class PermissionHelper {
   
   /// Open app settings
   static Future<bool> openAppSettings() async {
+    if (kIsWeb) return false;
     try {
       return await ph.openAppSettings();
     } catch (e) {

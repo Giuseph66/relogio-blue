@@ -31,7 +31,7 @@ function requireAppAuth(options = {}) {
     }
 
     const token = extractToken(req);
-    if (token && token === APP_AUTH_TOKEN) {
+    if ((token && token === APP_AUTH_TOKEN) || getAdminSession(req) || getAppSession(req)) {
       next();
       return;
     }
@@ -107,6 +107,20 @@ function getAdminSession(req) {
   return deserializeSession(sessionToken);
 }
 
+// Separate cookie and type: a participant session never grants admin access.
+const APP_COOKIE_NAME = 'geonexo_app_session';
+function getAppSession(req) {
+  const session = deserializeSession(parseCookies(req)[APP_COOKIE_NAME]);
+  return session?.type === 'app' ? session : null;
+}
+function setAppSessionCookie(res) {
+  const token = serializeSession({ email: 'guest', type: 'app', exp: Date.now() + ADMIN_SESSION_HOURS * 3600000 });
+  res.cookie(APP_COOKIE_NAME, token, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: ADMIN_SESSION_HOURS * 3600000 });
+}
+function clearAppSessionCookie(res) {
+  res.clearCookie(APP_COOKIE_NAME, { httpOnly: true, sameSite: 'lax', path: '/' });
+}
+
 function createAdminSession(email = ADMIN_EMAIL) {
   return serializeSession({
     email,
@@ -170,6 +184,7 @@ function validateAdminCredentials(email, password) {
 }
 
 module.exports = {
+  getAppSession, setAppSessionCookie, clearAppSessionCookie,
   requireAppAuth,
   requireLegacyMessagePostAuth,
   requireInternalAuth,

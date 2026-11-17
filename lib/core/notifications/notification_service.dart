@@ -1,4 +1,5 @@
-import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart';
+import '../platform/browser_bridge.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../logger/app_logger.dart';
 import 'question_notification_service.dart';
@@ -15,6 +16,7 @@ class NotificationService {
   /// Initialize the notification service
   Future<void> init() async {
     if (_initialized) return;
+    if (kIsWeb) { _initialized = true; return; }
 
     try {
       // POST_NOTIFICATIONS (Android 13+) is requested by PermissionGate.
@@ -44,7 +46,7 @@ class NotificationService {
 
       if (initialized == true) {
         // Create notification channel for Android
-        if (Platform.isAndroid) {
+        if (defaultTargetPlatform == TargetPlatform.android) {
           await _createNotificationChannel();
         }
         _initialized = true;
@@ -85,6 +87,10 @@ class NotificationService {
 
   /// Show notification when a message is received
   Future<void> showRxNotification(String preview) async {
+    if (kIsWeb) {
+      await BrowserBridge.call('notify', {'title': 'Relógio', 'body': preview});
+      return;
+    }
     if (!_initialized) {
       await init();
     }
@@ -143,7 +149,7 @@ class NotificationService {
 
   /// Cancel all notifications
   Future<void> cancelAll() async {
-    if (!_initialized) return;
+    if (!_initialized || kIsWeb) return;
     await _notifications.cancelAll();
   }
 
