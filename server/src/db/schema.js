@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS question_options (
   option_id TEXT NOT NULL,
   label TEXT NOT NULL,
   sort_order INTEGER NOT NULL DEFAULT 0,
+  quick_reply INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
 );

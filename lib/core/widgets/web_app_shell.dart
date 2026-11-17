@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'settings_tiles.dart';
 import '../auth/auth_service.dart';
 import '../ble/ble_question_protocol.dart';
 import '../../features/history/data/repositories/watch_response_repository.dart';
@@ -16,6 +19,15 @@ import '../platform/browser_bridge.dart';
 class WebAppShell extends StatefulWidget {
   final Widget child;
   const WebAppShell({super.key, required this.child});
+  static final navigatorKey = GlobalKey<NavigatorState>();
+
+  /// Reuses the shell's platform state inside the existing settings screen.
+  static Widget preferences(BuildContext context) =>
+      context
+          .findAncestorStateOfType<_WebAppShellState>()
+          ?._buildPreferences() ??
+      const SizedBox.shrink();
+
   @override
   State<WebAppShell> createState() => _WebAppShellState();
 }
@@ -26,13 +38,124 @@ class _WebAppShellState extends State<WebAppShell> {
   bool _syncing = false;
   bool _requesting = false;
   bool _answering = false;
-  bool _details = false;
+  final _preferencesChanged = ValueNotifier<int>(0);
+  Timer? _hintTimer;
+  bool _hintOffered = false;
+  bool _restoringMonitoring = false;
   bool _enablingNotifications = false;
   Map<String, dynamic> _notificationStatus = {};
   Map<String, dynamic> _pushStatus = {};
   bool _testingPush = false;
   String? _requestedQuestionId;
+  String? _requestedAnswerId;
+  final _dismissedQuestionIds = <String>{};
   String? _message;
+
+  void _refresh(VoidCallback change) {
+    if (!mounted) return;
+    setState(change);
+    _preferencesChanged.value++;
+    final message = _message;
+    _message = null;
+    if (message != null) _toast(message);
+  }
+
+  void _toast(String message, {String? action, VoidCallback? onAction}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final target = WebAppShell.navigatorKey.currentState?.overlay?.context;
+      if (target == null) return;
+      final colors = Theme.of(target).colorScheme;
+      final messenger = ScaffoldMessenger.maybeOf(target);
+      messenger?.hideCurrentSnackBar();
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(message, style: TextStyle(color: colors.onSurface)),
+          backgroundColor: colors.surfaceContainerHigh,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 8),
+          showCloseIcon: true,
+          closeIconColor: colors.onSurfaceVariant,
+          action: action != null && onAction != null
+              ? SnackBarAction(
+                  label: action,
+                  textColor: colors.primary,
+                  onPressed: onAction,
+                )
+              : null,
+        ),
+      );
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  void _openSettings() =>
+      WebAppShell.navigatorKey.currentState?.pushNamed('/settings');
+
+  Future<void> _offerSetupHint() async {
+    if (!kIsWeb || _hintOffered) return;
+    try {
+      final app = await BrowserBridge.call('app.status') as Map;
+      if (!mounted || _hintOffered) return;
+      final installed = app['installed'] == true;
+      if (!installed && app['installHintDismissed'] != true) {
+        _hintOffered = true;
+        await BrowserBridge.call('app.dismissInstallHint');
+        if (!mounted) return;
+        _toast(
+          'Instale o GeoNexo no celular. GPS e avisos ficam em Ajustes.',
+          action: 'Instalar',
+          onAction: () => unawaited(_install()),
+        );
+      } else if (AuthService().hasAppSession &&
+          (!_monitoring ||
+              _notificationStatus['permission'] != 'granted' ||
+              (_pushStatus['enabled'] == true &&
+                  _pushStatus['subscribed'] != true))) {
+        _hintOffered = true;
+        _toast(
+          'Configure localização e avisos para receber perguntas de visitas.',
+          action: 'Configurar',
+          onAction: _openSettings,
+        );
+      }
+    } catch (_) {
+      /* Installation hints are optional when offline. */
+    }
+  }
+
+  Future<void> _restoreMonitoring() async {
+    if (!kIsWeb || _restoringMonitoring || !AuthService().hasAppSession) return;
+    _restoringMonitoring = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final enabled = prefs.getBool('web_monitoring_enabled') ?? true;
+      final permission = await Geolocator.checkPermission();
+      if (!mounted || !AuthService().hasAppSession || _requesting || !enabled) {
+        return;
+      }
+      if (permission == LocationPermission.whileInUse ||
+          permission == LocationPermission.always) {
+        _refresh(() => _monitoring = true);
+        if (BrowserBridge.isVisible) {
+          GeofenceService().start(pollImmediately: true);
+        }
+      }
+    } catch (_) {
+      /* The user can grant access from settings. */
+    } finally {
+      _restoringMonitoring = false;
+    }
+  }
+
+  Future<void> _saveMonitoring(bool enabled) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('web_monitoring_enabled', enabled);
+    } catch (_) {
+      /* Monitoring remains usable without persistent preferences. */
+    }
+  }
 
   @override
   void initState() {
@@ -41,24 +164,35 @@ class _WebAppShellState extends State<WebAppShell> {
     AuthService().isGuestNotifier.addListener(_authChanged);
     GeofenceService().status.addListener(_gpsChanged);
     _requestedQuestionId = Uri.base.queryParameters['question'];
+    _requestedAnswerId = Uri.base.queryParameters['answer'];
     _events = BrowserBridge.events.listen((event) {
       if (event['type'] == 'visibility') {
         if (event['visible'] == true) {
           if (_monitoring) GeofenceService().start(pollImmediately: true);
           unawaited(_sync());
           unawaited(_loadNotificationStatus());
+          unawaited(_restoreMonitoring());
         } else {
           GeofenceService().stop();
         }
       } else if (event['type'] == 'update') {
-        if (mounted) setState(() {});
+        if (mounted) _refresh(() {});
+        _toast(
+          'Uma nova versão do GeoNexo está pronta.',
+          action: 'Atualizar',
+          onAction: () => unawaited(BrowserBridge.call('update')),
+        );
+      } else if (event['type'] == 'installed') {
+        unawaited(_loadNotificationStatus());
       } else if (event['type'] == 'online') {
         unawaited(_sync());
       } else if (event['type'] == 'notification.error') {
-        if (mounted) setState(() => _message = event['message'] as String?);
+        if (mounted) _refresh(() => _message = event['message'] as String?);
       } else if (event['type'] == 'question.open') {
         _requestedQuestionId = event['recordId'] as String?;
+        _requestedAnswerId = event['answerId'] as String?;
         if (_requestedQuestionId != null) {
+          _refresh(() => _dismissedQuestionIds.remove(_requestedQuestionId));
           QuestionNotificationService.focusQuestion(_requestedQuestionId!);
           unawaited(_sync());
         }
@@ -66,10 +200,17 @@ class _WebAppShellState extends State<WebAppShell> {
     });
     unawaited(_sync());
     unawaited(_loadNotificationStatus());
+    unawaited(_restoreMonitoring());
+    if (kIsWeb) {
+      _hintTimer = Timer(
+        const Duration(seconds: 2),
+        () => unawaited(_offerSetupHint()),
+      );
+    }
   }
 
   void _gpsChanged() {
-    if (mounted) setState(() {});
+    if (mounted) _refresh(() {});
   }
 
   Future<void> _loadNotificationStatus() async {
@@ -86,7 +227,7 @@ class _WebAppShellState extends State<WebAppShell> {
         }
       }
       if (mounted) {
-        setState(() {
+        _refresh(() {
           _notificationStatus = Map<String, dynamic>.from(status as Map);
           _pushStatus = push;
         });
@@ -99,7 +240,7 @@ class _WebAppShellState extends State<WebAppShell> {
   Future<void> _enableNotifications() async {
     // Call before any await: iOS requires the direct button gesture.
     final request = BrowserBridge.call('notifications.request');
-    setState(() => _enablingNotifications = true);
+    _refresh(() => _enablingNotifications = true);
     try {
       final permission = await request;
       Map<String, dynamic>? push;
@@ -115,11 +256,11 @@ class _WebAppShellState extends State<WebAppShell> {
       }
       await _loadNotificationStatus();
       if (!mounted) return;
-      setState(
+      _refresh(
         () => _message = switch (permission) {
           'granted' =>
             pushError != null
-                ? 'Avisos locais ativados. Web Push não ativado: $pushError'
+                ? 'Avisos locais ativados. Avisos do servidor não ativados: $pushError'
                 : push?['subscribed'] == true
                 ? 'Avisos ativados, inclusive enviados pelo servidor com o app fechado.'
                 : 'Avisos de visitas ativados com o app aberto. Avisos com o app fechado indisponíveis neste servidor ou navegador.',
@@ -135,22 +276,22 @@ class _WebAppShellState extends State<WebAppShell> {
       );
     } catch (_) {
       if (mounted) {
-        setState(
+        _refresh(
           () => _message =
               'Não foi possível ativar os avisos. Reabra a PWA instalada e tente novamente.',
         );
       }
     } finally {
-      if (mounted) setState(() => _enablingNotifications = false);
+      if (mounted) _refresh(() => _enablingNotifications = false);
     }
   }
 
   Future<void> _testPush() async {
-    setState(() => _testingPush = true);
+    _refresh(() => _testingPush = true);
     try {
       final result = await BrowserBridge.call('push.test') as Map;
       if (!mounted) return;
-      setState(
+      _refresh(
         () => _message = switch (result['status']) {
           'accepted' =>
             'O serviço de push aceitou o aviso. Confira as notificações do celular.',
@@ -165,12 +306,12 @@ class _WebAppShellState extends State<WebAppShell> {
       }
     } catch (error) {
       if (mounted) {
-        setState(
+        _refresh(
           () => _message = error.toString().replaceFirst('Bad state: ', ''),
         );
       }
     } finally {
-      if (mounted) setState(() => _testingPush = false);
+      if (mounted) _refresh(() => _testingPush = false);
     }
   }
 
@@ -179,14 +320,14 @@ class _WebAppShellState extends State<WebAppShell> {
       await BrowserBridge.call('push.disable');
       await _loadNotificationStatus();
       if (mounted) {
-        setState(
+        _refresh(
           () => _message =
               'Avisos do servidor desativados neste celular. Avisos locais de visitas continuam disponíveis.',
         );
       }
     } catch (_) {
       if (mounted) {
-        setState(
+        _refresh(
           () => _message =
               'Não foi possível atualizar os avisos no servidor. Confira a conexão e tente novamente.',
         );
@@ -202,7 +343,7 @@ class _WebAppShellState extends State<WebAppShell> {
         'tag': 'geonexo-test',
       });
       if (mounted) {
-        setState(
+        _refresh(
           () => _message = shown == true
               ? 'Aviso de teste enviado. Confira a Central de Notificações do celular.'
               : 'Ative os avisos na PWA instalada antes de testar.',
@@ -210,7 +351,7 @@ class _WebAppShellState extends State<WebAppShell> {
       }
     } catch (_) {
       if (mounted) {
-        setState(
+        _refresh(
           () => _message =
               'O aviso não foi enviado. Reabra o aplicativo instalado e confira as permissões.',
         );
@@ -219,7 +360,7 @@ class _WebAppShellState extends State<WebAppShell> {
   }
 
   String get _gpsLabel => !_monitoring
-      ? 'GeoNexo • GPS pausado'
+      ? 'GPS pausado'
       : switch (GeofenceService().status.value) {
           GpsMonitoringStatus.active => 'GPS ativo • app aberto',
           GpsMonitoringStatus.unavailable => 'GPS indisponível',
@@ -256,12 +397,28 @@ class _WebAppShellState extends State<WebAppShell> {
       if (_requestedQuestionId != null) {
         QuestionNotificationService.focusQuestion(_requestedQuestionId!);
       }
+      final answerId = _requestedAnswerId;
+      _requestedAnswerId = null;
+      if (answerId != null) {
+        for (final question in QuestionNotificationService.pendingQuestions.value) {
+          if (question.recordId == _requestedQuestionId &&
+              question.options.any((option) => option.id == answerId)) {
+            await _answer(question, answerId);
+            break;
+          }
+        }
+      }
       await DependencyInjection().syncService.syncNow();
       await OfflineQuestionCache().refresh();
     } catch (_) {
+      if (_requestedAnswerId != null) {
+        _requestedAnswerId = null;
+        _toast('Não foi possível salvar a resposta. Abra a pergunta e tente novamente.');
+      }
       /* Pending data stays local for the next retry. */
     } finally {
       _syncing = false;
+      if (_requestedAnswerId != null && mounted) unawaited(_sync());
     }
   }
 
@@ -272,17 +429,26 @@ class _WebAppShellState extends State<WebAppShell> {
     } else {
       unawaited(_sync());
       unawaited(_loadNotificationStatus());
+      unawaited(_restoreMonitoring());
+      if (kIsWeb) {
+        _hintTimer?.cancel();
+        _hintTimer = Timer(
+          const Duration(seconds: 2),
+          () => unawaited(_offerSetupHint()),
+        );
+      }
     }
-    if (mounted) setState(() {});
+    if (mounted) _refresh(() {});
   }
 
   Future<void> _toggleMonitoring() async {
     if (_monitoring) {
       GeofenceService().stop();
-      setState(() => _monitoring = false);
+      _refresh(() => _monitoring = false);
+      unawaited(_saveMonitoring(false));
       return;
     }
-    setState(() {
+    _refresh(() {
       _requesting = true;
       _message = null;
     });
@@ -296,20 +462,21 @@ class _WebAppShellState extends State<WebAppShell> {
       }
       if (!mounted || !AuthService().hasAppSession) return;
       _monitoring = true;
+      unawaited(_saveMonitoring(true));
       GeofenceService().start(pollImmediately: true);
       unawaited(BrowserBridge.call('storage.persist').catchError((_) => false));
     } catch (_) {
       _message =
           'Localização indisponível. Confira a permissão deste site, o GPS e a conexão HTTPS.';
     } finally {
-      if (mounted) setState(() => _requesting = false);
+      if (mounted) _refresh(() => _requesting = false);
     }
   }
 
   Future<void> _install() async {
     final installed = await BrowserBridge.call('install') == true;
     if (!mounted) return;
-    setState(
+    _refresh(
       () => _message = installed
           ? 'GeoNexo instalado.'
           : 'No menu do navegador, escolha Instalar aplicativo ou Adicionar à Tela de Início.',
@@ -320,7 +487,7 @@ class _WebAppShellState extends State<WebAppShell> {
     QuestionNotificationPayload question,
     String answer,
   ) async {
-    setState(() {
+    _refresh(() {
       _answering = true;
       _message = null;
     });
@@ -329,7 +496,7 @@ class _WebAppShellState extends State<WebAppShell> {
     } catch (_) {
       _message = 'Não foi possível salvar a resposta. Tente novamente.';
     } finally {
-      if (mounted) setState(() => _answering = false);
+      if (mounted) _refresh(() => _answering = false);
     }
   }
 
@@ -339,181 +506,160 @@ class _WebAppShellState extends State<WebAppShell> {
     AuthService().isGuestNotifier.removeListener(_authChanged);
     GeofenceService().status.removeListener(_gpsChanged);
     _events?.cancel();
+    _hintTimer?.cancel();
+    _preferencesChanged.dispose();
     GeofenceService().stop();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final authenticated = AuthService().hasAppSession;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget _buildPreferences() => ValueListenableBuilder<int>(
+    valueListenable: _preferencesChanged,
+    builder: (context, _, child) => SettingsSection(
+      title: 'Neste dispositivo',
+      footer: 'A detecção de visitas usa o GPS com o aplicativo aberto.',
       children: [
-        Material(
-          color: Theme.of(context).colorScheme.surfaceContainer,
-          child: SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 8,
-                    children: [
-                      TextButton.icon(
-                        icon: const Icon(Icons.info_outline, size: 18),
-                        label: Text(_gpsLabel),
-                        onPressed: () => setState(() => _details = !_details),
-                      ),
-                      if (authenticated)
-                        TextButton(
-                          onPressed: _requesting ? null : _toggleMonitoring,
-                          child: Text(
-                            _requesting
-                                ? 'Aguarde...'
-                                : _monitoring
-                                ? 'Pausar'
-                                : 'Ativar GPS',
-                          ),
-                        ),
-                      TextButton(
-                        onPressed: _install,
-                        child: const Text('Instalar'),
-                      ),
-                      if (BrowserBridge.updateAvailable)
-                        TextButton(
-                          onPressed: () => BrowserBridge.call('update'),
-                          child: const Text('Atualizar'),
-                        ),
-                      if (authenticated)
-                        TextButton.icon(
-                          icon: const Icon(
-                            Icons.notifications_outlined,
-                            size: 18,
-                          ),
-                          onPressed: _enablingNotifications
-                              ? null
-                              : _enableNotifications,
-                          label: Text(
-                            _enablingNotifications
-                                ? 'Aguarde...'
-                                : _notificationStatus['permission'] == 'granted'
-                                ? _pushStatus['enabled'] == true &&
-                                          _pushStatus['subscribed'] != true
-                                      ? 'Ativar Web Push'
-                                      : 'Avisos ativados'
-                                : 'Ativar avisos',
-                          ),
-                        ),
-                      if (authenticated &&
-                          _notificationStatus['permission'] == 'granted')
-                        TextButton(
-                          onPressed: _testNotification,
-                          child: const Text('Testar aviso'),
-                        ),
-                      if (authenticated && _pushStatus['subscribed'] == true)
-                        TextButton(
-                          onPressed: _testingPush ? null : _testPush,
-                          child: Text(
-                            _testingPush ? 'Enviando...' : 'Testar Web Push',
-                          ),
-                        ),
-                      if (authenticated &&
-                          _pushStatus['hasSubscription'] == true)
-                        TextButton(
-                          onPressed: _disablePush,
-                          child: const Text('Desativar Web Push'),
-                        ),
-                    ],
-                  ),
-                  if (_details)
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 8),
-                      child: Text(
-                        'Ative GPS e avisos para receber perguntas de visitas no próprio celular, sem relógio. '
-                        'Mantenha a PWA aberta. No iPhone, instale na Tela de Início e abra pelo ícone para permitir notificações.',
-                      ),
-                    ),
-                  if (_notificationStatus['needsInstallation'] == true)
-                    const Text(
-                      'iPhone: Compartilhar → Adicionar à Tela de Início. Abra pelo ícone para ativar os avisos.',
-                    ),
-                  if (_message != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(_message!, semanticsLabel: _message),
-                    ),
-                ],
-              ),
-            ),
+        if (AuthService().hasAppSession) ...[
+          SettingsSwitchTile(
+            icon: Icons.location_on_outlined,
+            title: 'Detectar visitas',
+            subtitle: _requesting ? 'Solicitando localização...' : _gpsLabel,
+            value: _monitoring,
+            onChanged: _requesting ? null : (_) => _toggleMonitoring(),
           ),
-        ),
-        Expanded(
-          child: Stack(
-            fit: StackFit.expand,
+          SettingsTile(
+            icon: Icons.notifications_outlined,
+            title: 'Permitir notificações',
+            subtitle: _notificationStatus['needsInstallation'] == true
+                ? 'No iPhone, instale e abra pela Tela de Início'
+                : _notificationStatus['permission'] == 'granted'
+                ? 'Permissão concedida neste dispositivo'
+                : 'Receba perguntas e avisos no celular',
+            value: _enablingNotifications ? 'Aguarde...' : null,
+            onTap: _enablingNotifications ? null : _enableNotifications,
+          ),
+          if (_pushStatus['enabled'] == true)
+            SettingsSwitchTile(
+              icon: Icons.mark_chat_unread_outlined,
+              title: 'Avisos com o app fechado',
+              subtitle: 'Comunicados enviados pelo servidor',
+              value: _pushStatus['subscribed'] == true,
+              onChanged: _enablingNotifications
+                  ? null
+                  : (enabled) =>
+                        enabled ? _enableNotifications() : _disablePush(),
+            ),
+        ],
+        if (_notificationStatus['installed'] != true)
+          SettingsTile(
+            icon: Icons.install_mobile_outlined,
+            title: 'Instalar no dispositivo',
+            subtitle: 'Abra o GeoNexo pelo ícone na Tela de Início',
+            onTap: _install,
+          ),
+        if (BrowserBridge.updateAvailable)
+          SettingsTile(
+            icon: Icons.system_update_alt,
+            title: 'Atualizar aplicativo',
+            onTap: () => BrowserBridge.call('update'),
+          ),
+        if (AuthService().hasAppSession &&
+            _notificationStatus['permission'] == 'granted')
+          ExpansionTile(
+            leading: const Icon(Icons.troubleshoot_outlined),
+            title: const Text('Verificar notificações'),
             children: [
-              Positioned.fill(child: widget.child),
-              if (authenticated)
-                ValueListenableBuilder<List<QuestionNotificationPayload>>(
-                  valueListenable: QuestionNotificationService.pendingQuestions,
-                  builder: (context, questions, _) {
-                    if (questions.isEmpty) return const SizedBox.shrink();
-                    final question = questions.first;
-                    return Align(
-                      alignment: Alignment.bottomCenter,
-                      child: SafeArea(
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: 520,
-                            maxHeight: MediaQuery.sizeOf(context).height * .55,
-                          ),
-                          child: Card(
-                            margin: const EdgeInsets.all(12),
-                            elevation: 12,
-                            child: SingleChildScrollView(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Text(
-                                    question.locationName,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleMedium,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(question.prompt),
-                                  const SizedBox(height: 12),
-                                  for (final option in question.options)
-                                    Padding(
-                                      padding: const EdgeInsets.only(bottom: 8),
-                                      child: FilledButton(
-                                        onPressed: _answering
-                                            ? null
-                                            : () =>
-                                                  _answer(question, option.id),
-                                        child: Text(option.label),
-                                      ),
-                                    ),
-                                  if (questions.length > 1)
-                                    Text(
-                                      '${questions.length} perguntas pendentes',
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
+              ListTile(
+                title: const Text('Testar aviso local'),
+                onTap: _testNotification,
+              ),
+              if (_pushStatus['subscribed'] == true)
+                ListTile(
+                  title: Text(
+                    _testingPush ? 'Enviando...' : 'Testar aviso do servidor',
+                  ),
+                  onTap: _testingPush ? null : _testPush,
                 ),
             ],
           ),
-        ),
+      ],
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final authenticated = AuthService().hasAppSession;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned.fill(child: widget.child),
+        if (authenticated)
+          ValueListenableBuilder<List<QuestionNotificationPayload>>(
+            valueListenable: QuestionNotificationService.pendingQuestions,
+            builder: (context, questions, _) {
+              final visibleQuestions = questions.where((question) =>
+                  !_dismissedQuestionIds.contains(question.recordId ?? question.questionId)).toList();
+              if (visibleQuestions.isEmpty) return const SizedBox.shrink();
+              final question = visibleQuestions.first;
+              return Align(
+                alignment: Alignment.bottomCenter,
+                child: SafeArea(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: 520,
+                      maxHeight: MediaQuery.sizeOf(context).height * .55,
+                    ),
+                    child: Card(
+                      margin: const EdgeInsets.all(12),
+                      elevation: 12,
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    question.locationName,
+                                    style: Theme.of(context).textTheme.titleMedium,
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Fechar pergunta',
+                                  icon: const Icon(Icons.close),
+                                  onPressed: () => setState(() {
+                                    _dismissedQuestionIds.addAll(visibleQuestions.map(
+                                      (item) => item.recordId ?? item.questionId,
+                                    ));
+                                  }),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(question.prompt),
+                            const SizedBox(height: 12),
+                            for (final option in question.options)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: FilledButton(
+                                  onPressed: _answering
+                                      ? null
+                                      : () => _answer(question, option.id),
+                                  child: Text(option.label),
+                                ),
+                              ),
+                            if (visibleQuestions.length > 1)
+                              Text('${visibleQuestions.length} perguntas pendentes'),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
       ],
     );
   }

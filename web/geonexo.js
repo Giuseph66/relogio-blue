@@ -4,21 +4,27 @@
   const devices = new Map();
   const subscriptions = new Map();
   let listener;
+  let pendingQuestionOpen;
   let database;
   let chooserGeneration = 0;
   let configuredService;
   let installPrompt;
   let updating = false;
-  const emit = (value) => listener?.(JSON.stringify(value));
+  let installedDuringSession = false;
+  const emit = (value) => {
+    if (listener) listener(JSON.stringify(value));
+    else if (value.type === 'question.open') pendingQuestionOpen = value;
+  };
 
   function notificationStatus() {
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    const installed = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    const installed = installedDuringSession || window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
     return {
       supported: window.isSecureContext && 'Notification' in window && 'serviceWorker' in navigator,
       permission: 'Notification' in window ? Notification.permission : 'unavailable',
       needsInstallation: ios && !installed,
+      installed,
     };
   }
 
@@ -236,8 +242,17 @@
         if (!status.supported || status.needsInstallation || status.permission !== 'granted') return false;
         try {
           const registration = await notificationRegistration();
+          const options = Array.isArray(data.options) ? data.options.filter(option =>
+            typeof option?.id === 'string' && option.id && typeof option.label === 'string' && option.label) : [];
+          const actions = data.recordId ? options.slice(0, Math.max(0, Number(Notification.maxActions) || 0))
+            .map(option => ({ action: `answer:${option.id}`, title: option.label })) : [];
+          const body = [data.body];
+          if (options.length) body.push(options.map(option => option.label).join(' • '));
+          if (options.length > actions.length) body.push('Toque para ver todas as opções.');
           await registration.showNotification(data.title, {
-            body: data.body, tag: data.tag || 'geonexo',
+            body: body.filter(Boolean).join('\n'), tag: data.tag || 'geonexo',
+            actions,
+            renotify: !!data.renotify,
             icon: new URL('icons/Icon-192.png', document.baseURI).href,
             data: { recordId: data.recordId || null },
           });
@@ -256,6 +271,13 @@
         return null;
       })();
       case 'notifications.status': return notificationStatus();
+      case 'app.status': return {
+        installed: notificationStatus().installed,
+        installHintDismissed: localStorage.getItem('geonexo.installHintDismissed') === 'true',
+      };
+      case 'app.dismissInstallHint':
+        localStorage.setItem('geonexo.installHintDismissed', 'true');
+        return null;
       case 'push.status': return syncPush(false);
       case 'push.enable': return syncPush(true);
       case 'push.disable': return disablePush();
@@ -324,7 +346,14 @@
     get updateAvailable() { return window.geonexoUpdateAvailable === true; },
     notifyUpdate() { window.geonexoUpdateAvailable = true; emit({ type: 'update' }); },
     get isVisible() { return document.visibilityState === 'visible'; },
-    listen(callback) { listener = callback; },
+    listen(callback) {
+      listener = callback;
+      if (pendingQuestionOpen) {
+        const event = pendingQuestionOpen;
+        pendingQuestionOpen = null;
+        Promise.resolve().then(() => emit(event));
+      }
+    },
     call(method, raw) {
       try {
         return Promise.resolve(dispatch(method, JSON.parse(raw)))
@@ -337,6 +366,11 @@
   };
   window.addEventListener('beforeinstallprompt', (event) => {
     event.preventDefault(); installPrompt = event;
+  });
+  window.addEventListener('appinstalled', () => {
+    installedDuringSession = true;
+    installPrompt = null;
+    emit({ type: 'installed' });
   });
   document.addEventListener('visibilitychange', () => emit({ type: 'visibility', visible: window.geonexo.isVisible }));
   navigator.serviceWorker?.addEventListener('controllerchange', () => {

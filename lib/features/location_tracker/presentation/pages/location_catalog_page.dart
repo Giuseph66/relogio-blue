@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../../core/di/dependency_injection.dart';
 import '../controllers/location_tracker_controller.dart';
@@ -17,9 +16,9 @@ class _LocationCatalogPageState extends State<LocationCatalogPage>
     with SingleTickerProviderStateMixin {
   late final LocationTrackerController _controller;
   late final TabController _tabController;
-  String? _simulatingId;
+  String? _sendingId;
 
-  /// Debug preview: question each location would trigger, cached per id.
+  /// Question each location would trigger, cached per id.
   final Map<String, Future<LocationQuestion?>> _questionPreviews = {};
 
   Future<LocationQuestion?> _questionFor(TrackedLocation loc) {
@@ -117,29 +116,6 @@ class _LocationCatalogPageState extends State<LocationCatalogPage>
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Debug only: fires the visit flow without real GPS movement.
-                    if (kDebugMode)
-                      _simulatingId == loc.id
-                          ? const Padding(
-                              padding: EdgeInsets.all(12),
-                              child: SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            )
-                          : IconButton(
-                              tooltip: 'Simular chegada',
-                              icon: Icon(
-                                Icons.near_me,
-                                color: context.palette.accent,
-                              ),
-                              onPressed: _simulatingId == null
-                                  ? () => _simulateArrival(loc)
-                                  : null,
-                            ),
                     IconButton(
                       icon: Icon(
                         Icons.delete_outline,
@@ -150,14 +126,40 @@ class _LocationCatalogPageState extends State<LocationCatalogPage>
                   ],
                 ),
               ),
-              if (kDebugMode) _QuestionPreview(future: _questionFor(loc)),
+              _QuestionPreview(future: _questionFor(loc)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                child: Wrap(
+                  spacing: 8,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () =>
+                          setState(() => _questionPreviews.remove(loc.id)),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Buscar perguntas'),
+                    ),
+                    TextButton.icon(
+                      onPressed: _sendingId == null
+                          ? () => _sendNotification(loc)
+                          : null,
+                      icon: _sendingId == loc.id
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.notifications_active_outlined),
+                      label: const Text('Enviar / reenviar notificação'),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         );
       },
     );
 
-    if (!kDebugMode) return list;
     return RefreshIndicator(
       color: context.palette.accent,
       onRefresh: _reloadPreviews,
@@ -165,22 +167,22 @@ class _LocationCatalogPageState extends State<LocationCatalogPage>
     );
   }
 
-  /// Runs the same flow as a real geofence hit: fetch question from server →
-  /// send to watch (if connected) → phone notification with quick replies.
-  Future<void> _simulateArrival(TrackedLocation loc) async {
-    setState(() => _simulatingId = loc.id);
+  /// Opens the location question on this device without recording a GPS visit.
+  Future<void> _sendNotification(TrackedLocation loc) async {
+    setState(() => _sendingId = loc.id);
     final triggered = await DependencyInjection().visitQuestionOrchestrator
-        .handleVisit(loc);
+        .handleVisit(loc, resendToPhone: true);
     if (!mounted) return;
-    setState(() => _simulatingId = null);
+    setState(() => _sendingId = null);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           triggered
-              ? 'Chegada simulada em ${loc.name}. Confira a notificação.'
-              : 'Nada disparado: sem pergunta no servidor para ${loc.name} '
-                    'ou já existe uma pergunta pendente (aguarde 3 min).',
+              ? 'Pergunta de ${loc.name} aberta neste dispositivo. '
+                    'O aviso do celular depende da permissão em Ajustes.'
+              : 'Não foi possível enviar. Verifique se ${loc.name} tem uma '
+                    'pergunta ativa com pelo menos duas opções e tente novamente.',
         ),
       ),
     );

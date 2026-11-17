@@ -213,6 +213,7 @@ async function hydrateQuestions(rows) {
       id: option.option_id,
       label: option.label,
       sortOrder: option.sort_order,
+      quickReply: Boolean(option.quick_reply),
     });
     optionsByQuestion.set(option.question_id, items);
   }
@@ -274,13 +275,16 @@ function assignOptionIds(options) {
     .map((option) => ({
       id: String(option?.id || '').trim(),
       label: String(option?.label || '').trim(),
+      quickReply: option?.quickReply,
     }))
     .filter((option) => option.label)
     .slice(0, MAX_OPTIONS);
 
   const used = new Set(cleaned.filter((o) => o.id).map((o) => o.id));
+  const explicitQuickReplies = cleaned.some((option) => option.quickReply !== undefined);
 
   return cleaned.map((option, index) => {
+    option.quickReply = explicitQuickReplies ? option.quickReply === true : index < 2;
     if (option.id) return option;
 
     const base = slugOptionId(option.label) || String(index + 1);
@@ -307,10 +311,10 @@ async function replaceQuestionOptions(questionId, options) {
     await db.run(
       `
         INSERT INTO question_options (
-          id, question_id, option_id, label, sort_order, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?)
+          id, question_id, option_id, label, sort_order, quick_reply, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
       `,
-      [createId('opt'), questionId, option.id, option.label, index, timestamp],
+      [createId('opt'), questionId, option.id, option.label, index, option.quickReply ? 1 : 0, timestamp],
     );
   }
 }

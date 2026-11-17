@@ -13,6 +13,7 @@ import '../../../../core/routes/app_routes.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/ui_mode/ui_mode_manager.dart';
 import '../../../../core/widgets/settings_tiles.dart';
+import '../../../../core/widgets/web_app_shell.dart';
 import '../../../auth/presentation/widgets/auth_guard.dart';
 import '../../../ble_old/data/models/ble_settings_model.dart';
 import '../../../ble_old/domain/entities/ble_settings.dart';
@@ -374,6 +375,7 @@ class _ModernSettingsPageState extends State<ModernSettingsPage> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
               children: [
+                if (kIsWeb) WebAppShell.preferences(context),
                 ValueListenableBuilder<ThemeMode>(
                   valueListenable: ThemeController().mode,
                   builder: (context, mode, _) => SettingsSection(
@@ -468,8 +470,10 @@ class _ModernSettingsPageState extends State<ModernSettingsPage> {
                       icon: Icons.admin_panel_settings_outlined,
                       iconColor: context.palette.caution,
                       title: 'Permissões do sistema',
-                      subtitle: 'Localização, Bluetooth e notificações',
-                      onTap: PermissionHelper.openAppSettings,
+                      subtitle: kIsWeb
+                          ? 'Gerencie nas configurações deste site no navegador'
+                          : 'Localização, Bluetooth e notificações',
+                      onTap: kIsWeb ? null : PermissionHelper.openAppSettings,
                     ),
                   ],
                 ),

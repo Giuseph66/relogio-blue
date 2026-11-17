@@ -5,30 +5,33 @@ const fs = require('node:fs');
 const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '../web/geonexo.js'), 'utf8');
 
-function browser({ ios = false, installed = true, permission = 'granted', registration } = {}) {
+function browser({ ios = false, installed = true, permission = 'granted', registration, maxActions = ios ? 0 : 2 } = {}) {
   const notifications = [];
+  const storage = new Map();
   let requests = 0;
+  const workerEvents = {};
   const navigator = {
     userAgent: ios ? 'iPhone' : 'Chrome', platform: ios ? 'iPhone' : 'Linux',
     standalone: installed, maxTouchPoints: 1,
     serviceWorker: {
-      addEventListener() {},
+      addEventListener(type, callback) { workerEvents[type] = callback; },
       async getRegistration() { return registration || {
         active: {}, async showNotification(title, options) { notifications.push({ title, ...options }); },
         async getNotifications({ tag }) { return notifications.filter(n => n.tag === tag).map(n => ({ close() { n.closed = true; } })); },
       }; },
     },
   };
-  const Notification = { permission, requestPermission() { requests++; return Promise.resolve(permission); } };
+  const Notification = { permission, maxActions, requestPermission() { requests++; return Promise.resolve(permission); } };
   const window = {
     navigator, Notification, isSecureContext: true,
     matchMedia: () => ({ matches: installed }), addEventListener() {},
   };
   vm.runInNewContext(source, {
     window, navigator, Notification, URL, Uint8Array, Promise, Map,
+    localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) },
     document: { baseURI: 'https://example.test/app/', addEventListener() {} },
   });
-  return { bridge: window.geonexo, notifications, requests: () => requests };
+  return { bridge: window.geonexo, notifications, requests: () => requests, workerEvents };
 }
 async function call(bridge, method, data = {}) {
   return JSON.parse(await bridge.call(method, JSON.stringify(data)));
@@ -39,6 +42,14 @@ test('iPhone requires Home Screen installation before requesting permission', as
   assert.equal((await call(env.bridge, 'notifications.status')).value.needsInstallation, true);
   assert.equal((await call(env.bridge, 'notifications.request')).value, 'install-required');
   assert.equal(env.requests(), 0);
+});
+
+test('installation hint can be dismissed and stays absent in standalone mode', async () => {
+  const browserTab = browser({ installed: false });
+  assert.equal((await call(browserTab.bridge, 'app.status')).value.installHintDismissed, false);
+  await call(browserTab.bridge, 'app.dismissInstallHint');
+  assert.equal((await call(browserTab.bridge, 'app.status')).value.installHintDismissed, true);
+  assert.equal((await call(browser({ ios: true, installed: true }).bridge, 'app.status')).value.installed, true);
 });
 
 test('installed iPhone requests notification permission directly in the click call', async () => {
@@ -67,6 +78,46 @@ test('denied permission does not report a notification as sent', async () => {
   const env = browser({ permission: 'denied' });
   assert.equal((await call(env.bridge, 'notify', { title: 'Campus' })).value, false);
   assert.equal(env.notifications.length, 0);
+});
+
+test('visit notifications carry answer actions up to the browser limit and list all choices', async () => {
+  const env = browser();
+  const options = [{ id: 'yes', label: 'Sim' }, { id: 'no', label: 'Não' }, { id: 'later', label: 'Depois' }];
+  await call(env.bridge, 'notify', { title: 'Casa', body: 'Está em casa?', recordId: 'r1', options });
+  const notification = env.notifications[0];
+  assert.equal(JSON.stringify(notification.actions), JSON.stringify([
+    { action: 'answer:yes', title: 'Sim' }, { action: 'answer:no', title: 'Não' },
+  ]));
+  assert.match(notification.body, /Sim • Não • Depois/);
+  assert.match(notification.body, /Toque para ver todas as opções/);
+});
+
+test('browsers without notification buttons still display alternatives in the body', async () => {
+  const env = browser({ ios: true });
+  await call(env.bridge, 'notify', { title: 'Casa', body: 'Está em casa?', recordId: 'r1', options: [{ id: 'yes', label: 'Sim' }, { id: 'no', label: 'Não' }] });
+  assert.equal(env.notifications[0].actions.length, 0);
+  assert.match(env.notifications[0].body, /Sim • Não/);
+});
+
+test('notification actions arriving before Flutter starts are delivered after its listener is ready', async () => {
+  const env = browser();
+  const intent = { type: 'question.open', recordId: 'r1', answerId: 'yes' };
+  env.workerEvents.message({ data: intent });
+  let received;
+  env.bridge.listen(raw => { received = JSON.parse(raw); });
+  await Promise.resolve();
+  assert.deepEqual(received, intent);
+});
+
+test('manual resend alerts again while keeping the same notification tag and record', async () => {
+  const env = browser();
+  const question = { title: 'Campus', tag: 'geonexo-question:record-1', recordId: 'record-1' };
+  await call(env.bridge, 'notify', question);
+  await call(env.bridge, 'notify', { ...question, renotify: true });
+  assert.equal(env.notifications[0].renotify, false);
+  assert.equal(env.notifications[1].renotify, true);
+  assert.equal(env.notifications[1].tag, env.notifications[0].tag);
+  assert.equal(env.notifications[1].data.recordId, 'record-1');
 });
 
 test('delivery failure reaches the app instead of disappearing silently', async () => {
@@ -114,6 +165,27 @@ test('notification tap starts a closed app with its question reference', async (
   click({ notification: { data: { recordId: 'record-2' }, close() {} }, waitUntil(p) { pending = p; } });
   await pending;
   assert.equal(url, 'https://example.test/app/?question=record-2');
+});
+
+test('answer button focuses the open app with the selected record and alternative', async () => {
+  let message;
+  const click = worker({ async matchAll() { return [{ url: 'https://example.test/app/', async focus() {}, postMessage(data) { message = data; } }]; } });
+  let pending;
+  click({ action: 'answer:yes', notification: { actions: [{ action: 'answer:yes' }], data: { recordId: 'r1' }, close() {} }, waitUntil(p) { pending = p; } });
+  await pending;
+  assert.equal(message.recordId, 'r1');
+  assert.equal(message.answerId, 'yes');
+});
+
+test('answer button opens a closed app with the selected alternative; unknown actions never submit', async () => {
+  let url;
+  const click = worker({ async matchAll() { return []; }, async openWindow(value) { url = value; } });
+  for (const [action, expected] of [['answer:no', 'https://example.test/app/?question=r1&answer=no'], ['answer:invalid', 'https://example.test/app/?question=r1']]) {
+    let pending;
+    click({ action, notification: { actions: [{ action: 'answer:no' }], data: { recordId: 'r1' }, close() {} }, waitUntil(p) { pending = p; } });
+    await pending;
+    assert.equal(url, expected);
+  }
 });
 
 function pushBrowser({ failSave = false, failDelete = false } = {}) {

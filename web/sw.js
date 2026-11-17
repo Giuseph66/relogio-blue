@@ -46,13 +46,17 @@ self.addEventListener('notificationclick', (event) => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const app = windows.find((client) => client.url.startsWith(base));
     const recordId = event.notification.data?.recordId;
+    const answerId = recordId && event.action?.startsWith('answer:') &&
+      event.notification.actions?.some(action => action.action === event.action)
+      ? event.action.slice('answer:'.length) : null;
     if (app) {
       await app.focus();
-      app.postMessage({ type: 'question.open', recordId });
+      app.postMessage({ type: 'question.open', recordId, answerId });
       return;
     }
     const url = new URL(base);
     if (recordId) url.searchParams.set('question', recordId);
+    if (answerId) url.searchParams.set('answer', answerId);
     return self.clients.openWindow(url.href);
   })());
 });

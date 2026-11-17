@@ -817,7 +817,7 @@ function openEditor(locationId, preset = null) {
   els.qEnabled.checked = question ? question.reactiveEnabled : true;
   els.qPrompt.value = question?.prompt || '';
   editor.options = (question?.options?.length ? question.options : PRESETS.yn.map((label) => ({ label })))
-    .map((o) => ({ id: o.id || null, label: o.label, originalLabel: o.id ? o.label : null }));
+    .map((o, index) => ({ id: o.id || null, label: o.label, originalLabel: o.id ? o.label : null, quickReply: o.quickReply ?? index < 2 }));
   renderOptions();
   syncQuestionEnabled();
 
@@ -963,11 +963,23 @@ function renderOptions() {
       <span class="option-index">${index + 1}</span>
       <input type="text" maxlength="${BLE.labelMax}" placeholder="Resposta ${index + 1}" aria-label="Resposta ${index + 1}" />
       <span class="counter"></span>
-      <button type="button" class="icon-btn" title="Remover" aria-label="Remover resposta ${index + 1}"><svg><use href="#i-x"/></svg></button>`;
+      <button type="button" class="icon-btn quick-reply" title="Resposta rápida na notificação" aria-label="Resposta rápida ${index + 1}" aria-pressed="${option.quickReply === true}"><span aria-hidden="true">${option.quickReply ? '★' : '☆'}</span></button>
+      <button type="button" class="icon-btn option-remove" title="Remover" aria-label="Remover resposta ${index + 1}"><svg><use href="#i-x"/></svg></button>`;
 
     const input = row.querySelector('input');
     const counter = row.querySelector('.counter');
-    const remove = row.querySelector('button');
+    const remove = row.querySelector('.option-remove');
+    const quickReply = row.querySelector('.quick-reply');
+    quickReply.disabled = !option.quickReply && options.filter((item) => item.quickReply).length >= 2;
+    if (quickReply.disabled) quickReply.title = 'Desmarque uma estrela para escolher esta resposta';
+    quickReply.addEventListener('click', () => {
+      historyFlush();
+      option.quickReply = !option.quickReply;
+      state.editor.dirty = true;
+      renderOptions();
+      els.qOptions.querySelectorAll('.quick-reply')[index]?.focus();
+      historyCommit();
+    });
 
     input.value = option.label;
     counter.textContent = `${option.label.length}/${BLE.labelMax}`;
@@ -1006,7 +1018,7 @@ function renderOptions() {
 function addOption(label) {
   if (state.editor.options.length >= BLE.maxOptions) return;
   historyFlush();
-  state.editor.options.push({ id: null, label, originalLabel: null });
+  state.editor.options.push({ id: null, label, originalLabel: null, quickReply: false });
   state.editor.dirty = true;
   renderOptions();
   historyCommit();
@@ -1015,11 +1027,11 @@ function addOption(label) {
 function applyPreset(labels) {
   historyFlush();
   const previous = state.editor.options;
-  state.editor.options = labels.map((label) => {
+  state.editor.options = labels.map((label, index) => {
     const match = previous.find((o) => o.id && normalize(o.originalLabel) === normalize(label));
     return match
-      ? { id: match.id, label, originalLabel: match.originalLabel }
-      : { id: null, label, originalLabel: null };
+      ? { id: match.id, label, originalLabel: match.originalLabel, quickReply: index < 2 }
+      : { id: null, label, originalLabel: null, quickReply: index < 2 };
   });
   state.editor.dirty = true;
   renderOptions();
@@ -1079,7 +1091,7 @@ function snapshotEditor() {
     addressTitle: els.pointAddress.title,
     qEnabled: els.qEnabled.checked,
     prompt: els.qPrompt.value,
-    options: state.editor.options.map((o) => ({ id: o.id, label: o.label, originalLabel: o.originalLabel })),
+    options: state.editor.options.map((o) => ({ id: o.id, label: o.label, originalLabel: o.originalLabel, quickReply: o.quickReply })),
   };
 }
 
@@ -1223,10 +1235,10 @@ async function saveEditor() {
 
   const prompt = els.qPrompt.value.trim();
   const options = editor.options
-    .map((o) => ({ label: o.label.trim(), id: o.id, originalLabel: o.originalLabel }))
+    .map((o) => ({ label: o.label.trim(), id: o.id, originalLabel: o.originalLabel, quickReply: o.quickReply }))
     .filter((o) => o.label)
     // Keep the stored id only if the label meaning didn't change, so old answers still match.
-    .map((o) => (o.id && normalize(o.label) === normalize(o.originalLabel) ? { id: o.id, label: o.label } : { label: o.label }));
+    .map((o) => (o.id && normalize(o.label) === normalize(o.originalLabel) ? { id: o.id, label: o.label, quickReply: o.quickReply } : { label: o.label, quickReply: o.quickReply }));
 
   const wantsQuestion = els.qEnabled.checked && (prompt || editor.questionId);
   if (wantsQuestion) {
@@ -1529,6 +1541,8 @@ function translateError(message) {
   const known = {
     'external map service failed': 'Serviço de mapas indisponível. Tente novamente.',
     'a question needs between 2 and 4 options': 'A pergunta precisa de 2 a 4 respostas.',
+    'choose at most two quick replies': 'Marque no máximo duas respostas rápidas.',
+    'quickReply must be a boolean': 'A marcação de resposta rápida deve estar ativada ou desativada.',
     'name is required': 'Informe o nome do local.',
     'prompt is required': 'Escreva a pergunta.',
     'location not found': 'Local não encontrado (talvez já excluído).',

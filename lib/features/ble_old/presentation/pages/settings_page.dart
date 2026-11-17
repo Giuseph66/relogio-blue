@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../../core/widgets/app_drawer.dart';
+import '../../../../core/widgets/web_app_shell.dart';
 import '../../../../core/di/dependency_injection.dart';
 import '../../../../core/ble/ble_constants.dart';
 import '../../../../core/background/ble_foreground_service.dart';
@@ -94,7 +95,7 @@ class _SettingsPageState extends State<SettingsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
+              if (kIsWeb) WebAppShell.preferences(context),
               const Text(
                 'Configurações BLE',
                 style: TextStyle(

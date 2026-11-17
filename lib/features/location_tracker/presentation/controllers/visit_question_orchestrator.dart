@@ -155,22 +155,22 @@ class VisitQuestionOrchestrator {
     _phoneAnswerPort = port;
   }
 
-  void _showPhoneQuestion({
+  Future<void> _showPhoneQuestion({
     required BleQuestionPrompt prompt,
     required TrackedLocation location,
     required String recordId,
     required String command,
+    bool forceNotify = false,
   }) {
-    unawaited(
-      _questionNotifications.showQuestion(
-        QuestionNotificationPayload.fromPrompt(
-          prompt,
-          locationId: location.id,
-          locationName: location.name,
-          recordId: recordId,
-          command: command,
-        ),
+    return _questionNotifications.showQuestion(
+      QuestionNotificationPayload.fromPrompt(
+        prompt,
+        locationId: location.id,
+        locationName: location.name,
+        recordId: recordId,
+        command: command,
       ),
+      forceNotify: forceNotify,
     );
   }
 
@@ -241,11 +241,13 @@ class VisitQuestionOrchestrator {
   }
 
   /// Called when a geofence visit is detected.
+  /// Manual catalog sends can alert the phone again using its unanswered record.
   Future<bool> handleVisit(
     TrackedLocation location, {
     double? latitude,
     double? longitude,
     String? city,
+    bool resendToPhone = false,
   }) async {
     try {
       final question = await resolveQuestionFor(
@@ -276,6 +278,24 @@ class VisitQuestionOrchestrator {
       // command — this is what the watch will echo back in the QANS.
       final safeQuestionId = _extractCommandId(command);
 
+      if (resendToPhone) {
+        for (final record in await _responseRepository.getAll()) {
+          if (record.locationId != location.id ||
+              record.questionStatus == QuestionStatus.answered ||
+              record.questionCommand != command) {
+            continue;
+          }
+          await _showPhoneQuestion(
+            prompt: prompt,
+            location: location,
+            recordId: record.id,
+            command: command,
+            forceNotify: true,
+          );
+          return true;
+        }
+      }
+
       // Skip if we're already waiting for an answer to this question.
       if (_pending.containsKey(safeQuestionId)) return false;
 
@@ -292,7 +312,7 @@ class VisitQuestionOrchestrator {
           questionId: safeQuestionId,
           questionCommand: command,
         );
-        _showPhoneQuestion(
+        await _showPhoneQuestion(
           prompt: prompt,
           location: location,
           recordId: offlineRecord.id,
@@ -315,7 +335,7 @@ class VisitQuestionOrchestrator {
       );
 
       _registerPending(safeQuestionId, record.id, location.id, location.name);
-      _showPhoneQuestion(
+      await _showPhoneQuestion(
         prompt: prompt,
         location: location,
         recordId: record.id,

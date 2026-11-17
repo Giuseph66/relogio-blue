@@ -21,9 +21,49 @@ void main() {
       ),
     );
     expect(tester.getSize(find.byKey(content)).width, 800);
+    expect(tester.getSize(find.byKey(content)).height, 600);
+    expect(find.text('Ativar GPS'), findsNothing);
+    expect(find.text('Instalar'), findsNothing);
     auth.isAuthenticatedNotifier.value = true;
     await tester.pump();
     expect(tester.getSize(find.byKey(content)).width, 800);
+    expect(tester.getSize(find.byKey(content)).height, 600);
+    expect(find.text('Testar Web Push'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    auth.isAuthenticatedNotifier.value = false;
+  });
+
+  testWidgets('PWA permissions are available only inside the settings route', (
+    tester,
+  ) async {
+    final auth = AuthService();
+    auth.isAuthenticatedNotifier.value = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: WebAppShell.navigatorKey,
+        builder: (context, child) =>
+            Overlay.wrap(child: WebAppShell(child: child!)),
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) =>
+                      Scaffold(body: WebAppShell.preferences(context)),
+                ),
+              ),
+              child: const Text('Abrir ajustes'),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Detectar visitas'), findsNothing);
+    await tester.tap(find.text('Abrir ajustes'));
+    await tester.pumpAndSettle();
+    expect(find.text('Detectar visitas'), findsOneWidget);
+    expect(find.text('Permitir notificações'), findsOneWidget);
+    expect(find.text('Testar aviso local'), findsNothing);
     await tester.pumpWidget(const SizedBox());
     auth.isAuthenticatedNotifier.value = false;
   });

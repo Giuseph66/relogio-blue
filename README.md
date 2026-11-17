@@ -153,18 +153,27 @@ de até uma requisição por segundo. O mapa continua exigindo internet para til
 ### No celular
 
 1. Abra `https://SEU-DOMINIO/app/` e faça login ou entre como visitante.
-2. Toque em **Instalar** ou use **Adicionar à Tela de Início** no navegador.
-3. Toque em **Ativar GPS** e **Ativar avisos**. O indicador confirma quando uma
-   posição foi obtida; os locais próximos são atualizados sem precisar abrir o mapa.
+2. Use a sugestão temporária **Instalar**, **Ajustes → Neste dispositivo →
+   Instalar no dispositivo**, ou **Adicionar à Tela de Início** no navegador.
+3. Em **Ajustes → Neste dispositivo**, habilite **Detectar visitas** e
+   **Permitir notificações**. Os locais próximos são atualizados sem abrir o mapa.
+   O GPS retoma automaticamente quando a permissão já foi concedida e a opção
+   continua habilitada; pausar essa opção é respeitado ao reabrir o aplicativo.
    No iPhone (iOS 16.4+), abra pelo ícone da Tela de Início para permitir avisos.
-   Use **Testar aviso** para conferir a Central de Notificações do celular.
+   Os testes ficam recolhidos em **Verificar notificações**, nessa mesma seção.
 4. Em **Dispositivos**, toque em **Selecionar relógio**, escolha o BLE no seletor
    do navegador e depois **Conectar**. Use Chrome no Android para essa função.
 5. Ao detectar uma visita, a pergunta aparece na PWA e gera um aviso do sistema
    se a permissão estiver concedida. Não precisa conectar relógio. Toque no aviso
    para abrir a pergunta e responder no celular. Respostas ficam locais
    quando offline e são sincronizadas ao recuperar a conexão ou voltar ao app.
-6. Quando houver nova versão pronta, toque em **Atualizar**.
+   O aviso também lista as alternativas e inclui botões até o limite permitido
+   pelo navegador (normalmente dois no Chrome/Android). Tocar em um botão abre
+   a PWA e registra a opção escolhida. Para ver todas as opções ou em navegadores
+   sem esses botões, toque no corpo do aviso. Expanda o aviso no Android se os
+   botões estiverem recolhidos. Avisos anteriores à atualização devem ser reenviados.
+6. Quando houver nova versão pronta, use **Atualizar** no aviso temporário ou
+   **Atualizar aplicativo** em Ajustes. Não há barra permanente de controles PWA.
 
 Após o primeiro carregamento online e a instalação do cache, a interface e os
 dados já armazenados podem abrir offline. Um login anterior é necessário para
@@ -501,16 +510,18 @@ falhas temporárias aparecem no resultado e podem ser reenviadas pelo operador.
 1. Abra `/app/` por HTTPS, entre como visitante ou administrador e instale a PWA.
 2. No Android, use preferencialmente Chrome. No iPhone, use iOS 16.4 ou posterior,
    adicione à Tela de Início e **abra pelo ícone instalado**.
-3. Toque em **Ativar avisos** e aceite a permissão. Se os avisos locais já estavam
-   permitidos, toque em **Ativar Web Push**. A inscrição será salva no servidor.
-4. **Testar aviso** verifica a notificação local do navegador. **Testar Web Push**
-   faz o servidor enviar um aviso ao celular atual; aguarde 30 segundos entre testes.
+3. Em **Ajustes → Neste dispositivo**, toque em **Permitir notificações** e
+   aceite a permissão. Ative **Avisos com o app fechado** para cadastrar o celular
+   no servidor, caso essa opção ainda não esteja habilitada.
+4. Abra **Verificar notificações** nessa seção. **Testar aviso local** verifica
+   o navegador; **Testar aviso do servidor** verifica o Web Push ao celular atual.
+   Aguarde 30 segundos entre testes remotos.
 5. Para comprovar o funcionamento fechado, feche a PWA no celular e, **em outro
    navegador/computador**, entre em `/admin/dashboard`. Em **Avisos nos celulares**,
    escreva título/mensagem e toque em **Enviar aos celulares inscritos**.
 6. Confira a Central de Notificações e toque no aviso para abrir a PWA. O aviso
    remoto é um comunicado; perguntas pendentes já salvas continuam no aplicativo.
-7. Para parar os avisos remotos naquele aparelho, use **Desativar Web Push**.
+7. Para parar os avisos remotos naquele aparelho, desligue **Avisos com o app fechado**.
    Sair da conta na PWA também remove a inscrição do navegador. Bloquear a
    permissão nos ajustes do sistema impede novas notificações.
 

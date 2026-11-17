@@ -48,6 +48,7 @@ class MyApp extends StatelessWidget {
         valueListenable: UiModeManager().useModernUiNotifier,
         builder: (context, isModernUi, child) {
           return MaterialApp(
+            navigatorKey: kIsWeb ? WebAppShell.navigatorKey : null,
             title: 'GeoNexo',
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,

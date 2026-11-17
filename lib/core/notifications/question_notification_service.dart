@@ -192,7 +192,11 @@ class QuestionNotificationService {
     return 10000 + (hash % 900000);
   }
 
-  Future<void> showQuestion(QuestionNotificationPayload payload, {bool notify = true}) async {
+  Future<void> showQuestion(
+    QuestionNotificationPayload payload, {
+    bool notify = true,
+    bool forceNotify = false,
+  }) async {
     if (payload.options.length < bleQuestionMinOptions) return;
     if (kIsWeb) {
       final alreadyPending = pendingQuestions.value.any((question) =>
@@ -200,13 +204,17 @@ class QuestionNotificationService {
       pendingQuestions.value = [
         ...pendingQuestions.value.where((p) => p.questionId != payload.questionId), payload,
       ];
-      if (notify && !alreadyPending) {
+      if (notify && (!alreadyPending || forceNotify)) {
         try {
           await BrowserBridge.call('notify', {
             'title': payload.locationName.isEmpty ? 'Nova pergunta' : payload.locationName,
             'body': payload.prompt,
             'tag': _webTag(payload),
             'recordId': payload.recordId,
+            'renotify': forceNotify,
+            'options': payload.options
+                .map((option) => {'id': option.id, 'label': option.label})
+                .toList(),
           });
         } catch (error) {
           AppLogger.warning('QuestionNotification: web notification failed: $error');
@@ -229,7 +237,7 @@ class QuestionNotificationService {
         priority: Priority.high,
         category: AndroidNotificationCategory.message,
         styleInformation: BigTextStyleInformation(payload.prompt),
-        onlyAlertOnce: true,
+        onlyAlertOnce: !forceNotify,
         autoCancel: false,
         icon: '@mipmap/ic_launcher',
         actions: <AndroidNotificationAction>[

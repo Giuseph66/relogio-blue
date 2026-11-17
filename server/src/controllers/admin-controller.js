@@ -22,6 +22,12 @@ function assertValidOptions(options) {
   if (filled.length < 2 || filled.length > 4) {
     throw new HttpError(400, 'a question needs between 2 and 4 options');
   }
+  if (filled.some((option) => option.quickReply !== undefined && typeof option.quickReply !== 'boolean')) {
+    throw new HttpError(400, 'quickReply must be a boolean');
+  }
+  if (filled.filter((option) => option.quickReply === true).length > 2) {
+    throw new HttpError(400, 'choose at most two quick replies');
+  }
 }
 
 async function getLocations(req, res) {
