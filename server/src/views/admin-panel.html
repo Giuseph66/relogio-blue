@@ -205,6 +205,20 @@
         </header>
 
         <div class="dashboard">
+          <section class="card">
+            <header class="card-head"><h3>Avisos nos celulares</h3></header>
+            <form id="push-form" class="editor-section">
+              <p id="push-status" class="muted" role="status">Consultando inscrições...</p>
+              <label class="field"><span class="field-label">Título do aviso</span>
+                <input name="title" type="text" maxlength="80" required value="GeoNexo" />
+              </label>
+              <label class="field"><span class="field-label">Mensagem</span>
+                <textarea name="body" rows="2" maxlength="240" required placeholder="Escreva o aviso para os participantes"></textarea>
+              </label>
+              <p class="muted">O aviso abre a PWA e pode chegar com ela fechada. Não detecta novas visitas pelo GPS.</p>
+              <button type="submit" class="btn btn-primary" disabled>Enviar aos celulares inscritos</button>
+            </form>
+          </section>
           <div class="kpis" id="stats-grid"></div>
 
           <div class="grid-2-1">
@@ -272,6 +286,7 @@
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="/admin/admin.js" defer></script>
+  <script src="/admin/push.js" defer></script>
 </body>
 
 </html>

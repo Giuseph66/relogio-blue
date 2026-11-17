@@ -1,6 +1,15 @@
 const schema = `
 PRAGMA foreign_keys = ON;
 
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id TEXT PRIMARY KEY,
+  endpoint TEXT NOT NULL UNIQUE,
+  subscription_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  last_test_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS devices (
   id TEXT PRIMARY KEY,
   name TEXT,

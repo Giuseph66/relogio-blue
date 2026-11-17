@@ -29,6 +29,8 @@ class _WebAppShellState extends State<WebAppShell> {
   bool _details = false;
   bool _enablingNotifications = false;
   Map<String, dynamic> _notificationStatus = {};
+  Map<String, dynamic> _pushStatus = {};
+  bool _testingPush = false;
   String? _requestedQuestionId;
   String? _message;
 
@@ -73,10 +75,21 @@ class _WebAppShellState extends State<WebAppShell> {
   Future<void> _loadNotificationStatus() async {
     try {
       final status = await BrowserBridge.call('notifications.status');
+      var push = <String, dynamic>{};
+      if (AuthService().hasAppSession) {
+        try {
+          push = Map<String, dynamic>.from(
+            await BrowserBridge.call('push.status') as Map,
+          );
+        } catch (_) {
+          /* Local visit notifications remain usable offline. */
+        }
+      }
       if (mounted) {
-        setState(
-          () => _notificationStatus = Map<String, dynamic>.from(status as Map),
-        );
+        setState(() {
+          _notificationStatus = Map<String, dynamic>.from(status as Map);
+          _pushStatus = push;
+        });
       }
     } catch (_) {
       /* Native widget tests do not load the browser adapter. */
@@ -89,12 +102,27 @@ class _WebAppShellState extends State<WebAppShell> {
     setState(() => _enablingNotifications = true);
     try {
       final permission = await request;
+      Map<String, dynamic>? push;
+      String? pushError;
+      if (permission == 'granted') {
+        try {
+          push = Map<String, dynamic>.from(
+            await BrowserBridge.call('push.enable') as Map,
+          );
+        } catch (error) {
+          pushError = error.toString().replaceFirst('Bad state: ', '');
+        }
+      }
       await _loadNotificationStatus();
       if (!mounted) return;
       setState(
         () => _message = switch (permission) {
           'granted' =>
-            'Avisos de visitas ativados. Use Testar aviso para conferir no celular.',
+            pushError != null
+                ? 'Avisos locais ativados. Web Push não ativado: $pushError'
+                : push?['subscribed'] == true
+                ? 'Avisos ativados, inclusive enviados pelo servidor com o app fechado.'
+                : 'Avisos de visitas ativados com o app aberto. Avisos com o app fechado indisponíveis neste servidor ou navegador.',
           'install-required' =>
             'No iPhone, adicione o GeoNexo à Tela de Início e abra pelo ícone para ativar os avisos.',
           'denied' =>
@@ -114,6 +142,55 @@ class _WebAppShellState extends State<WebAppShell> {
       }
     } finally {
       if (mounted) setState(() => _enablingNotifications = false);
+    }
+  }
+
+  Future<void> _testPush() async {
+    setState(() => _testingPush = true);
+    try {
+      final result = await BrowserBridge.call('push.test') as Map;
+      if (!mounted) return;
+      setState(
+        () => _message = switch (result['status']) {
+          'accepted' =>
+            'O serviço de push aceitou o aviso. Confira as notificações do celular.',
+          'expired' => 'Inscrição expirada. Ative os avisos novamente.',
+          _ =>
+            'O serviço de push não aceitou o aviso. Tente novamente mais tarde.',
+        },
+      );
+      if (result['status'] == 'expired') {
+        await BrowserBridge.call('push.disable');
+        await _loadNotificationStatus();
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _message = error.toString().replaceFirst('Bad state: ', ''),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _testingPush = false);
+    }
+  }
+
+  Future<void> _disablePush() async {
+    try {
+      await BrowserBridge.call('push.disable');
+      await _loadNotificationStatus();
+      if (mounted) {
+        setState(
+          () => _message =
+              'Avisos do servidor desativados neste celular. Avisos locais de visitas continuam disponíveis.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _message =
+              'Não foi possível atualizar os avisos no servidor. Confira a conexão e tente novamente.',
+        );
+      }
     }
   }
 
@@ -194,6 +271,7 @@ class _WebAppShellState extends State<WebAppShell> {
       _monitoring = false;
     } else {
       unawaited(_sync());
+      unawaited(_loadNotificationStatus());
     }
     if (mounted) setState(() {});
   }
@@ -322,7 +400,10 @@ class _WebAppShellState extends State<WebAppShell> {
                             _enablingNotifications
                                 ? 'Aguarde...'
                                 : _notificationStatus['permission'] == 'granted'
-                                ? 'Avisos ativados'
+                                ? _pushStatus['enabled'] == true &&
+                                          _pushStatus['subscribed'] != true
+                                      ? 'Ativar Web Push'
+                                      : 'Avisos ativados'
                                 : 'Ativar avisos',
                           ),
                         ),
@@ -331,6 +412,19 @@ class _WebAppShellState extends State<WebAppShell> {
                         TextButton(
                           onPressed: _testNotification,
                           child: const Text('Testar aviso'),
+                        ),
+                      if (authenticated && _pushStatus['subscribed'] == true)
+                        TextButton(
+                          onPressed: _testingPush ? null : _testPush,
+                          child: Text(
+                            _testingPush ? 'Enviando...' : 'Testar Web Push',
+                          ),
+                        ),
+                      if (authenticated &&
+                          _pushStatus['hasSubscription'] == true)
+                        TextButton(
+                          onPressed: _disablePush,
+                          child: const Text('Desativar Web Push'),
                         ),
                     ],
                   ),

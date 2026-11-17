@@ -28,6 +28,70 @@
     return registration;
   }
 
+  async function pushApi(action, method = 'GET', data) {
+    const response = await fetch(`/api/push/${action}`, {
+      method, credentials: 'same-origin', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' },
+      ...(data ? { body: JSON.stringify(data) } : {}),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Servidor de avisos indisponível.');
+    return result;
+  }
+
+  function pushToken() {
+    let token = localStorage.getItem('geonexo.push.token');
+    if (!token) {
+      token = Array.from(crypto.getRandomValues(new Uint8Array(32)), n => n.toString(16).padStart(2, '0')).join('');
+      localStorage.setItem('geonexo.push.token', token);
+    }
+    return token;
+  }
+
+  async function syncPush(create) {
+    const pushConfig = await pushApi('config');
+    const status = notificationStatus();
+    const supported = status.supported && !status.needsInstallation && 'PushManager' in window;
+    if (!pushConfig.enabled || !supported || status.permission !== 'granted') {
+      return { enabled: pushConfig.enabled, supported, subscribed: false };
+    }
+    const registration = await notificationRegistration();
+    let subscription = await registration.pushManager.getSubscription();
+    const encoded = pushConfig.publicKey.replace(/-/g, '+').replace(/_/g, '/');
+    const key = Uint8Array.from(atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, '=')), c => c.charCodeAt(0));
+    const previousKey = subscription?.options?.applicationServerKey;
+    if (previousKey && Array.from(new Uint8Array(previousKey)).join() !== Array.from(key).join()) {
+      if (!create) return { enabled: true, supported, subscribed: false, hasSubscription: true };
+      await subscription.unsubscribe();
+      subscription = null;
+    }
+    if (!subscription && create) {
+      subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    }
+    if (subscription) {
+      try {
+        await pushApi('subscription', 'POST', { token: pushToken(), subscription: subscription.toJSON() });
+      } catch (error) {
+        if (create) throw error;
+        return { enabled: true, supported, subscribed: false, hasSubscription: true };
+      }
+    }
+    return { enabled: true, supported, subscribed: !!subscription, hasSubscription: !!subscription };
+  }
+
+  async function disablePush() {
+    const token = localStorage.getItem('geonexo.push.token');
+    try {
+      if (token) await pushApi('subscription', 'DELETE', { token });
+    } finally {
+      // Even an expired login must not leave this browser receiving notices after logout.
+      const registration = await navigator.serviceWorker?.getRegistration(new URL('./', document.baseURI));
+      const subscription = await registration?.pushManager?.getSubscription();
+      if (subscription) await subscription.unsubscribe();
+    }
+    return { subscribed: false };
+  }
+
   function openDatabase() {
     if (!database) {
       database = new Promise((resolve, reject) => {
@@ -192,6 +256,10 @@
         return null;
       })();
       case 'notifications.status': return notificationStatus();
+      case 'push.status': return syncPush(false);
+      case 'push.enable': return syncPush(true);
+      case 'push.disable': return disablePush();
+      case 'push.test': return pushApi('test', 'POST', { token: pushToken() });
       case 'notifications.request': {
         const status = notificationStatus();
         if (status.needsInstallation) return 'install-required';
@@ -213,6 +281,7 @@
         })();
       case 'storage.persist': return navigator.storage?.persist?.() ?? false;
       case 'auth.guest': return (async () => {
+        try { await disablePush(); } catch (_) { /* Browser unsubscribe still runs. */ }
         // Clear a prior admin session before entering participant mode.
         await fetch('/api/admin/auth/logout', { method: 'POST', credentials: 'same-origin' });
         const response = await fetch('/api/app/auth/guest', { method: 'POST', credentials: 'same-origin' });
@@ -223,6 +292,9 @@
       case 'auth.login':
       case 'auth.logout': return (async () => {
         const action = method.split('.')[1];
+        if (action === 'logout') {
+          try { await disablePush(); } catch (_) { /* Do not block logout when offline. */ }
+        }
         const response = await fetch(`/api/admin/auth/${action}`, {
           method: action === 'session' ? 'GET' : 'POST', credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },

@@ -15,6 +15,7 @@ const { discoveryRoutes } = require('./discovery-routes');
 const { internalRoutes } = require('./internal-routes');
 const { appSessionRoutes } = require('./app-session-routes');
 const { geocodingRoutes } = require('./geocoding-routes');
+const { pushRoutes, adminPushRoutes } = require('./push-routes');
 
 const router = Router();
 
@@ -28,6 +29,8 @@ router.use('/api/admin/auth', adminAuthRoutes);
 router.use('/api/app/auth', appSessionRoutes);
 router.use('/api/location', locationRoutes);
 router.use('/api/geocoding', geocodingRoutes);
+router.use('/api/push', pushRoutes);
+router.use('/api/admin/push', adminPushRoutes);
 router.use('/api/responses', responseRoutes);
 router.use('/api/sync', syncRoutes);
 router.use('/api/admin', adminRoutes);

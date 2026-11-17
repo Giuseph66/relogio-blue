@@ -49,6 +49,8 @@ app.*.map.json
 # Local server data
 /server/data/*.db
 /server/data/*.sqlite
+/server/.env
+/server/.env.local
 .claude/
 
 # Local secrets (API keys) - never commit

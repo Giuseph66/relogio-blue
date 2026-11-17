@@ -9,6 +9,7 @@ Object.assign(process.env, {
   ENABLE_APP_AUTH: 'true', ADMIN_EMAIL: 'test@example.test', ADMIN_PASSWORD: 'test-password',
   ADMIN_COOKIE_SECRET: 'isolated-pwa-test-secret', APP_AUTH_TOKEN: 'isolated-mobile-token',
   PWA_DIR: directory,
+  VAPID_PUBLIC_KEY: '', VAPID_PRIVATE_KEY: '', VAPID_SUBJECT: '',
 });
 fs.writeFileSync(path.join(directory, 'index.html'), '<!doctype html><title>PWA test</title>');
 const { createApp } = require('../server/src/app');
@@ -36,6 +37,9 @@ test('PWA participant cookie authorizes app APIs without granting admin access',
   assert.match(guest.headers.get('set-cookie'), /SameSite=Lax/);
   assert.equal((await fetch(`${origin}/api/location/offline-bundle`, { headers: { cookie } })).status, 200);
   assert.equal((await fetch(`${origin}/api/admin/catalog`, { headers: { cookie } })).status, 401);
+  const copiedGuestCookie = `rb_admin_session=${cookie.slice(cookie.indexOf('=') + 1)}`;
+  assert.equal((await fetch(`${origin}/api/admin/catalog`, { headers: { cookie: copiedGuestCookie } })).status, 401);
+  assert.equal((await fetch(`${origin}/api/admin/push/status`, { headers: { 'x-appengine-cron': 'true' } })).status, 401);
   const tampered = cookie.slice(0, -1) + (cookie.endsWith('a') ? 'b' : 'a');
   assert.equal((await fetch(`${origin}/api/location/offline-bundle`, { headers: { cookie: tampered } })).status, 401);
 });
@@ -45,6 +49,14 @@ test('Native mobile bearer token continues to authorize app APIs', async () => {
     headers: { Authorization: 'Bearer isolated-mobile-token' },
   });
   assert.equal(response.status, 200);
+});
+
+test('server remains usable without VAPID and push reports disabled clearly', async () => {
+  const config = await fetch(`${origin}/api/push/config`);
+  assert.deepEqual(await config.json(), { enabled: false, publicKey: null });
+  assert.equal((await fetch(`${origin}/api/push/test`, {
+    method: 'POST', headers: { Authorization: 'Bearer isolated-mobile-token' },
+  })).status, 503);
 });
 
 test('Admin cookie authorizes the PWA and invalid coordinates never reach geocoder', async () => {

@@ -56,3 +56,18 @@ self.addEventListener('notificationclick', (event) => {
     return self.clients.openWindow(url.href);
   })());
 });
+
+self.addEventListener('push', (event) => {
+  event.waitUntil((async () => {
+    let message = {};
+    try { message = event.data?.json() || {}; } catch (_) { /* Always show a visible notification. */ }
+    await self.registration.showNotification(
+      typeof message.title === 'string' ? message.title.slice(0, 80) : 'GeoNexo', {
+        body: typeof message.body === 'string' ? message.body.slice(0, 240) : 'Você recebeu um novo aviso. Toque para abrir.',
+        tag: typeof message.tag === 'string' ? message.tag.slice(0, 100) : 'geonexo-push',
+        icon: new URL('icons/Icon-192.png', base).href,
+        data: { recordId: null },
+      },
+    );
+  })());
+});

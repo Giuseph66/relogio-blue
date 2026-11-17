@@ -47,6 +47,10 @@ function loadEnvFiles(filePaths) {
 module.exports = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   PORT: Number(process.env.PORT || 3001),
+  HOST: process.env.HOST || '0.0.0.0',
+  VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY || '',
+  VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY || '',
+  VAPID_SUBJECT: process.env.VAPID_SUBJECT || '',
   DB_PATH: process.env.DB_PATH || path.join(DATA_DIR, 'app.db'),
   PUBLIC_DIR: path.join(ROOT_DIR, 'public'),
   PWA_DIR: path.resolve(process.env.PWA_DIR || path.join(ROOT_DIR, 'public', 'app')),

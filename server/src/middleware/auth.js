@@ -48,7 +48,7 @@ function requireLegacyMessagePostAuth() {
 
 function requireInternalAuth(req, res, next) {
   const token = extractToken(req);
-  const isAppEngineCron = req.headers['x-appengine-cron'] === 'true';
+  const isAppEngineCron = process.env.GAE_ENV === 'standard' && req.headers['x-appengine-cron'] === 'true';
 
   if (isAppEngineCron || (token && token === INTERNAL_AUTH_TOKEN)) {
     next();
@@ -104,7 +104,8 @@ function deserializeSession(token) {
 function getAdminSession(req) {
   const cookies = parseCookies(req);
   const sessionToken = cookies[ADMIN_COOKIE_NAME];
-  return deserializeSession(sessionToken);
+  const session = deserializeSession(sessionToken);
+  return session && !session.type ? session : null;
 }
 
 // Separate cookie and type: a participant session never grants admin access.
@@ -147,7 +148,7 @@ function setAdminSessionCookie(res, token) {
 function isInternalRequest(req) {
   const token = extractToken(req);
   return (
-    req.headers['x-appengine-cron'] === 'true' ||
+    (process.env.GAE_ENV === 'standard' && req.headers['x-appengine-cron'] === 'true') ||
     (token && token === INTERNAL_AUTH_TOKEN)
   );
 }
