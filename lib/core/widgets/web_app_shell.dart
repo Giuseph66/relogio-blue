@@ -27,6 +27,9 @@ class _WebAppShellState extends State<WebAppShell> {
   bool _requesting = false;
   bool _answering = false;
   bool _details = false;
+  bool _enablingNotifications = false;
+  Map<String, dynamic> _notificationStatus = {};
+  String? _requestedQuestionId;
   String? _message;
 
   @override
@@ -34,11 +37,14 @@ class _WebAppShellState extends State<WebAppShell> {
     super.initState();
     AuthService().isAuthenticatedNotifier.addListener(_authChanged);
     AuthService().isGuestNotifier.addListener(_authChanged);
+    GeofenceService().status.addListener(_gpsChanged);
+    _requestedQuestionId = Uri.base.queryParameters['question'];
     _events = BrowserBridge.events.listen((event) {
       if (event['type'] == 'visibility') {
         if (event['visible'] == true) {
           if (_monitoring) GeofenceService().start(pollImmediately: true);
           unawaited(_sync());
+          unawaited(_loadNotificationStatus());
         } else {
           GeofenceService().stop();
         }
@@ -46,10 +52,102 @@ class _WebAppShellState extends State<WebAppShell> {
         if (mounted) setState(() {});
       } else if (event['type'] == 'online') {
         unawaited(_sync());
+      } else if (event['type'] == 'notification.error') {
+        if (mounted) setState(() => _message = event['message'] as String?);
+      } else if (event['type'] == 'question.open') {
+        _requestedQuestionId = event['recordId'] as String?;
+        if (_requestedQuestionId != null) {
+          QuestionNotificationService.focusQuestion(_requestedQuestionId!);
+          unawaited(_sync());
+        }
       }
     });
     unawaited(_sync());
+    unawaited(_loadNotificationStatus());
   }
+
+  void _gpsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _loadNotificationStatus() async {
+    try {
+      final status = await BrowserBridge.call('notifications.status');
+      if (mounted) {
+        setState(
+          () => _notificationStatus = Map<String, dynamic>.from(status as Map),
+        );
+      }
+    } catch (_) {
+      /* Native widget tests do not load the browser adapter. */
+    }
+  }
+
+  Future<void> _enableNotifications() async {
+    // Call before any await: iOS requires the direct button gesture.
+    final request = BrowserBridge.call('notifications.request');
+    setState(() => _enablingNotifications = true);
+    try {
+      final permission = await request;
+      await _loadNotificationStatus();
+      if (!mounted) return;
+      setState(
+        () => _message = switch (permission) {
+          'granted' =>
+            'Avisos de visitas ativados. Use Testar aviso para conferir no celular.',
+          'install-required' =>
+            'No iPhone, adicione o GeoNexo à Tela de Início e abra pelo ícone para ativar os avisos.',
+          'denied' =>
+            'Avisos bloqueados. Libere as notificações do GeoNexo nos ajustes do celular.',
+          'unavailable' =>
+            'Notificações indisponíveis. Confira HTTPS e a versão do sistema. No iPhone, use iOS 16.4 ou posterior.',
+          _ =>
+            'Permissão não concedida. As perguntas continuam disponíveis no aplicativo.',
+        },
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _message =
+              'Não foi possível ativar os avisos. Reabra a PWA instalada e tente novamente.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _enablingNotifications = false);
+    }
+  }
+
+  Future<void> _testNotification() async {
+    try {
+      final shown = await BrowserBridge.call('notify', {
+        'title': 'GeoNexo',
+        'body': 'Avisos de visitas ativados neste celular.',
+        'tag': 'geonexo-test',
+      });
+      if (mounted) {
+        setState(
+          () => _message = shown == true
+              ? 'Aviso de teste enviado. Confira a Central de Notificações do celular.'
+              : 'Ative os avisos na PWA instalada antes de testar.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _message =
+              'O aviso não foi enviado. Reabra o aplicativo instalado e confira as permissões.',
+        );
+      }
+    }
+  }
+
+  String get _gpsLabel => !_monitoring
+      ? 'GeoNexo • GPS pausado'
+      : switch (GeofenceService().status.value) {
+          GpsMonitoringStatus.active => 'GPS ativo • app aberto',
+          GpsMonitoringStatus.unavailable => 'GPS indisponível',
+          _ => 'Buscando localização...',
+        };
 
   Future<void> _sync() async {
     if (!AuthService().hasAppSession || _syncing) return;
@@ -75,7 +173,11 @@ class _WebAppShellState extends State<WebAppShell> {
             recordId: row.id,
             command: row.questionCommand,
           ),
+          notify: false,
         );
+      }
+      if (_requestedQuestionId != null) {
+        QuestionNotificationService.focusQuestion(_requestedQuestionId!);
       }
       await DependencyInjection().syncService.syncNow();
       await OfflineQuestionCache().refresh();
@@ -157,6 +259,7 @@ class _WebAppShellState extends State<WebAppShell> {
   void dispose() {
     AuthService().isAuthenticatedNotifier.removeListener(_authChanged);
     AuthService().isGuestNotifier.removeListener(_authChanged);
+    GeofenceService().status.removeListener(_gpsChanged);
     _events?.cancel();
     GeofenceService().stop();
     super.dispose();
@@ -183,11 +286,7 @@ class _WebAppShellState extends State<WebAppShell> {
                     children: [
                       TextButton.icon(
                         icon: const Icon(Icons.info_outline, size: 18),
-                        label: Text(
-                          _monitoring
-                              ? 'Monitorando com app aberto'
-                              : 'GeoNexo Web',
-                        ),
+                        label: Text(_gpsLabel),
                         onPressed: () => setState(() => _details = !_details),
                       ),
                       if (authenticated)
@@ -198,7 +297,7 @@ class _WebAppShellState extends State<WebAppShell> {
                                 ? 'Aguarde...'
                                 : _monitoring
                                 ? 'Pausar'
-                                : 'Ativar localização',
+                                : 'Ativar GPS',
                           ),
                         ),
                       TextButton(
@@ -211,21 +310,27 @@ class _WebAppShellState extends State<WebAppShell> {
                           child: const Text('Atualizar'),
                         ),
                       if (authenticated)
-                        IconButton(
-                          tooltip: 'Permitir avisos do relógio',
-                          icon: const Icon(Icons.notifications_outlined),
-                          onPressed: () async {
-                            final result = await BrowserBridge.call(
-                              'notifications.request',
-                            );
-                            if (mounted) {
-                              setState(
-                                () => _message = result == 'granted'
-                                    ? 'Avisos permitidos enquanto o app recebe dados do relógio.'
-                                    : 'Avisos não permitidos. As perguntas continuam aparecendo no aplicativo.',
-                              );
-                            }
-                          },
+                        TextButton.icon(
+                          icon: const Icon(
+                            Icons.notifications_outlined,
+                            size: 18,
+                          ),
+                          onPressed: _enablingNotifications
+                              ? null
+                              : _enableNotifications,
+                          label: Text(
+                            _enablingNotifications
+                                ? 'Aguarde...'
+                                : _notificationStatus['permission'] == 'granted'
+                                ? 'Avisos ativados'
+                                : 'Ativar avisos',
+                          ),
+                        ),
+                      if (authenticated &&
+                          _notificationStatus['permission'] == 'granted')
+                        TextButton(
+                          onPressed: _testNotification,
+                          child: const Text('Testar aviso'),
                         ),
                     ],
                   ),
@@ -233,13 +338,13 @@ class _WebAppShellState extends State<WebAppShell> {
                     const Padding(
                       padding: EdgeInsets.only(bottom: 8),
                       child: Text(
-                        'Mantenha o aplicativo aberto e a tela ligada para monitorar visitas e receber dados do relógio. '
-                        'Para Bluetooth, use Chrome no Android. No iPhone, os demais recursos continuam disponíveis.',
+                        'Ative GPS e avisos para receber perguntas de visitas no próprio celular, sem relógio. '
+                        'Mantenha a PWA aberta. No iPhone, instale na Tela de Início e abra pelo ícone para permitir notificações.',
                       ),
                     ),
-                  if (!BrowserBridge.bluetoothSupported)
+                  if (_notificationStatus['needsInstallation'] == true)
                     const Text(
-                      'Este navegador não oferece Bluetooth. Use Chrome no Android para conectar o relógio.',
+                      'iPhone: Compartilhar → Adicionar à Tela de Início. Abra pelo ícone para ativar os avisos.',
                     ),
                   if (_message != null)
                     Padding(

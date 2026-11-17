@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import '../platform/browser_bridge.dart';
 import 'dart:convert';
 import 'dart:ui';
 
@@ -154,6 +155,16 @@ class QuestionNotificationService {
   static final _answers = StreamController<String>.broadcast();
   static Stream<String> get answers => _answers.stream;
 
+  static void focusQuestion(String recordId) {
+    final questions = pendingQuestions.value;
+    final index = questions.indexWhere((question) => question.recordId == recordId);
+    if (index <= 0) return;
+    pendingQuestions.value = [questions[index], ...questions.take(index), ...questions.skip(index + 1)];
+  }
+
+  static String _webTag(QuestionNotificationPayload question) =>
+      'geonexo-question:${question.recordId ?? question.questionId}';
+
   static Future<void> answerFromWeb(QuestionNotificationPayload payload, String answerId) async {
     if (!payload.options.any((option) => option.id == answerId)) return;
     final saved = await WatchResponseRepository().saveAnswerFromPhone(
@@ -181,12 +192,26 @@ class QuestionNotificationService {
     return 10000 + (hash % 900000);
   }
 
-  Future<void> showQuestion(QuestionNotificationPayload payload) async {
+  Future<void> showQuestion(QuestionNotificationPayload payload, {bool notify = true}) async {
     if (payload.options.length < bleQuestionMinOptions) return;
     if (kIsWeb) {
+      final alreadyPending = pendingQuestions.value.any((question) =>
+          question.questionId == payload.questionId && question.recordId == payload.recordId);
       pendingQuestions.value = [
         ...pendingQuestions.value.where((p) => p.questionId != payload.questionId), payload,
       ];
+      if (notify && !alreadyPending) {
+        try {
+          await BrowserBridge.call('notify', {
+            'title': payload.locationName.isEmpty ? 'Nova pergunta' : payload.locationName,
+            'body': payload.prompt,
+            'tag': _webTag(payload),
+            'recordId': payload.recordId,
+          });
+        } catch (error) {
+          AppLogger.warning('QuestionNotification: web notification failed: $error');
+        }
+      }
       return;
     }
 
@@ -244,7 +269,13 @@ class QuestionNotificationService {
 
   Future<void> cancelQuestion(String questionId) async {
     if (kIsWeb) {
+      final removed = pendingQuestions.value.where((p) => p.questionId == questionId).toList();
       pendingQuestions.value = pendingQuestions.value.where((p) => p.questionId != questionId).toList();
+      for (final question in removed) {
+        try {
+          await BrowserBridge.call('notify.cancel', {'tag': _webTag(question)});
+        } catch (_) { /* Saving an answer must not depend on notification support. */ }
+      }
       return;
     }
     try {

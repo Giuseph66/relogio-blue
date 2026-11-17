@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
+import '../config/app_config.dart';
 
 import '../location/app_geocoding.dart' as geocoding;
 
@@ -7,6 +9,8 @@ import '../../features/maps_old/domain/entities/map_location.dart';
 import '../../features/maps_old/domain/usecases/get_current_location.dart';
 import '../../features/location_tracker/presentation/controllers/location_tracker_controller.dart';
 import '../../features/location_tracker/presentation/controllers/visit_question_orchestrator.dart';
+
+enum GpsMonitoringStatus { stopped, locating, active, unavailable }
 
 /// Singleton background-aware service that polls GPS every [pollInterval] and
 /// triggers geofence detection + the question flow independently of any page
@@ -29,6 +33,9 @@ class GeofenceService {
   String? _lastCity;
   bool _running = false;
   bool _polling = false;
+  bool _resolvingCity = false;
+  DateTime? _catalogAttempt;
+  final status = ValueNotifier(GpsMonitoringStatus.stopped);
 
   void init({
     required GetCurrentLocation getLocation,
@@ -44,15 +51,20 @@ class GeofenceService {
   void start({bool pollImmediately = false}) {
     if (_running) return;
     _running = true;
+    status.value = GpsMonitoringStatus.locating;
+    if (kIsWeb) _catalogAttempt = null;
     if (pollImmediately) unawaited(_tick());
     _timer = Timer.periodic(pollInterval, (_) => _tick());
-    AppLogger.info('GeofenceService: started (interval=${pollInterval.inSeconds}s)');
+    AppLogger.info(
+      'GeofenceService: started (interval=${pollInterval.inSeconds}s)',
+    );
   }
 
   void stop() {
     _timer?.cancel();
     _timer = null;
     _running = false;
+    status.value = GpsMonitoringStatus.stopped;
     AppLogger.info('GeofenceService: stopped');
   }
 
@@ -62,9 +74,10 @@ class GeofenceService {
   /// and the geofence service share the same position + city without doubling
   /// the GPS requests.
   void updateLocation(MapLocation location, {String? city}) {
+    if (kIsWeb && !_running) return;
     if (city != null) _lastCity = city;
     // Run geofence check immediately on each UI-driven update.
-    _checkGeofence(location);
+    unawaited(_checkGeofence(location));
   }
 
   // ─── Internal ─────────────────────────────────────────────────────────────
@@ -73,24 +86,58 @@ class GeofenceService {
     if (_polling) return;
     _polling = true;
     try {
-      final location = await _getLocation();
-      // Reverse geocode lazily (only when city is stale / first tick).
-      if (_lastCity == null) {
-        _lastCity = await _resolveCity(location.latitude, location.longitude);
+      final location = kIsWeb
+          ? await _getLocation().timeout(const Duration(seconds: 15))
+          : await _getLocation();
+      if (!_running) return;
+      status.value = GpsMonitoringStatus.active;
+      // A slow/offline address lookup must not delay visit detection.
+      await _checkGeofence(location);
+      if (kIsWeb &&
+          (_catalogAttempt == null ||
+              DateTime.now().difference(_catalogAttempt!) >=
+                  const Duration(minutes: 2))) {
+        _catalogAttempt = DateTime.now();
+        try {
+          await _tracker.syncFromServer(
+            AppConfig.serverApiUrl,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            city: _lastCity,
+          );
+          if (_running) await _checkGeofence(location);
+        } catch (error) {
+          // Cached locations remain usable without the server.
+          _catalogAttempt = DateTime.now().subtract(
+            const Duration(seconds: 90),
+          );
+          AppLogger.debug('GeofenceService: catalog unavailable: $error');
+        }
       }
-      _checkGeofence(location);
+      // Reverse geocode lazily (only when city is stale / first tick).
+      if (_lastCity == null && !_resolvingCity) {
+        _resolvingCity = true;
+        unawaited(
+          _resolveCity(location.latitude, location.longitude)
+              .then((city) {
+                _lastCity = city;
+              })
+              .whenComplete(() => _resolvingCity = false),
+        );
+      }
     } catch (e) {
+      if (_running) status.value = GpsMonitoringStatus.unavailable;
       AppLogger.debug('GeofenceService: tick error: $e');
     } finally {
       _polling = false;
     }
   }
 
-  void _checkGeofence(MapLocation location) async {
+  Future<void> _checkGeofence(MapLocation location) async {
     final visited = await _tracker.checkProximityAndRegisterVisit(location);
     if (visited != null) {
       AppLogger.info('GeofenceService: visit detected – ${visited.name}');
-      _orchestrator.handleVisit(
+      await _orchestrator.handleVisit(
         visited,
         latitude: location.latitude,
         longitude: location.longitude,
@@ -107,8 +154,8 @@ class GeofenceService {
       return (p.locality?.isNotEmpty == true)
           ? p.locality
           : (p.subAdministrativeArea?.isNotEmpty == true)
-              ? p.subAdministrativeArea
-              : p.administrativeArea;
+          ? p.subAdministrativeArea
+          : p.administrativeArea;
     } catch (_) {
       return null;
     }

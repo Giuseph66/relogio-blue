@@ -45,7 +45,14 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const app = windows.find((client) => client.url.startsWith(base));
-    if (app) return app.focus();
-    return self.clients.openWindow(base);
+    const recordId = event.notification.data?.recordId;
+    if (app) {
+      await app.focus();
+      app.postMessage({ type: 'question.open', recordId });
+      return;
+    }
+    const url = new URL(base);
+    if (recordId) url.searchParams.set('question', recordId);
+    return self.clients.openWindow(url.href);
   })());
 });

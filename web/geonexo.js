@@ -11,6 +11,23 @@
   let updating = false;
   const emit = (value) => listener?.(JSON.stringify(value));
 
+  function notificationStatus() {
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const installed = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    return {
+      supported: window.isSecureContext && 'Notification' in window && 'serviceWorker' in navigator,
+      permission: 'Notification' in window ? Notification.permission : 'unavailable',
+      needsInstallation: ios && !installed,
+    };
+  }
+
+  async function notificationRegistration() {
+    const registration = await navigator.serviceWorker.getRegistration(new URL('./', document.baseURI));
+    if (!registration?.active) throw new Error('Instalação offline ainda não está pronta. Reabra o aplicativo em alguns segundos.');
+    return registration;
+  }
+
   function openDatabase() {
     if (!database) {
       database = new Promise((resolve, reject) => {
@@ -150,15 +167,38 @@
         }
         return null;
       })();
-      case 'notify':
-        if ('Notification' in window && Notification.permission === 'granted') {
-          navigator.serviceWorker?.ready.then((reg) => reg.showNotification(data.title, {
-            body: data.body, tag: data.tag || 'geonexo', icon: 'icons/Icon-192.png',
-          })).catch(() => {});
+      case 'notify': return (async () => {
+        const status = notificationStatus();
+        if (!status.supported || status.needsInstallation || status.permission !== 'granted') return false;
+        try {
+          const registration = await notificationRegistration();
+          await registration.showNotification(data.title, {
+            body: data.body, tag: data.tag || 'geonexo',
+            icon: new URL('icons/Icon-192.png', document.baseURI).href,
+            data: { recordId: data.recordId || null },
+          });
+          return true;
+        } catch (error) {
+          emit({ type: 'notification.error', message: 'Não foi possível mostrar o aviso do sistema. A pergunta continua disponível no aplicativo.' });
+          throw error;
+        }
+      })();
+      case 'notify.cancel': return (async () => {
+        if (!('serviceWorker' in navigator)) return null;
+        const registration = await navigator.serviceWorker.getRegistration(new URL('./', document.baseURI));
+        if (registration?.active) {
+          for (const notification of await registration.getNotifications({ tag: data.tag })) notification.close();
         }
         return null;
-      case 'notifications.request':
-        return 'Notification' in window ? Notification.requestPermission() : 'denied';
+      })();
+      case 'notifications.status': return notificationStatus();
+      case 'notifications.request': {
+        const status = notificationStatus();
+        if (status.needsInstallation) return 'install-required';
+        if (!status.supported) return 'unavailable';
+        // Keep requestPermission directly in the button's user activation.
+        return Notification.requestPermission();
+      }
       case 'update': return navigator.serviceWorker.getRegistration().then((reg) => {
         if (reg?.waiting) { updating = true; reg.waiting.postMessage('ACTIVATE_UPDATE'); }
         return null;
@@ -229,6 +269,9 @@
   document.addEventListener('visibilitychange', () => emit({ type: 'visibility', visible: window.geonexo.isVisible }));
   navigator.serviceWorker?.addEventListener('controllerchange', () => {
     if (updating) location.reload();
+  });
+  navigator.serviceWorker?.addEventListener('message', (event) => {
+    if (event.data?.type === 'question.open') emit(event.data);
   });
   window.addEventListener('online', () => emit({ type: 'online' }));
 })();

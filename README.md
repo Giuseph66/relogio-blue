@@ -153,10 +153,15 @@ de até uma requisição por segundo. O mapa continua exigindo internet para til
 
 1. Abra `https://SEU-DOMINIO/app/` e faça login ou entre como visitante.
 2. Toque em **Instalar** ou use **Adicionar à Tela de Início** no navegador.
-3. Toque em **Ativar localização** para monitorar visitas com o app aberto.
+3. Toque em **Ativar GPS** e **Ativar avisos**. O indicador confirma quando uma
+   posição foi obtida; os locais próximos são atualizados sem precisar abrir o mapa.
+   No iPhone (iOS 16.4+), abra pelo ícone da Tela de Início para permitir avisos.
+   Use **Testar aviso** para conferir a Central de Notificações do celular.
 4. Em **Dispositivos**, toque em **Selecionar relógio**, escolha o BLE no seletor
    do navegador e depois **Conectar**. Use Chrome no Android para essa função.
-5. Perguntas aparecem na PWA com botões de resposta; respostas ficam locais
+5. Ao detectar uma visita, a pergunta aparece na PWA e gera um aviso do sistema
+   se a permissão estiver concedida. Não precisa conectar relógio. Toque no aviso
+   para abrir a pergunta e responder no celular. Respostas ficam locais
    quando offline e são sincronizadas ao recuperar a conexão ou voltar ao app.
 6. Quando houver nova versão pronta, toque em **Atualizar**.
 
@@ -173,7 +178,10 @@ visitas e BLE precisam do app visível; o navegador pode interrompê-los ao bloq
 a tela ou fechar/minimizar o app. Ao retornar, o monitoramento ativado retoma.
 Safari/iPhone não oferece Web Bluetooth; mapas, catálogo, histórico e respostas
 no celular continuam disponíveis. Notificações web são opcionais e não mantêm
-GPS/BLE em execução. O Android nativo conserva seus serviços existentes.
+GPS/BLE em execução. Web Push enviado por um servidor pode chegar com a PWA
+fechada, mas não fornece novas posições GPS nem descobre visitas sozinho.
+O envio Web Push pelo servidor ainda não está implementado neste projeto.
+O Android nativo conserva seus serviços existentes.
 
 Validação física necessária antes da distribuição: parear o relógio real,
 enviar `QST`, receber `QANS`, testar reconexão, visita, perda de internet e
