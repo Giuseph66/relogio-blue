@@ -1,16 +1,23 @@
+const crypto = require('crypto');
 const { upsertDevice } = require('../repositories/device-repository');
-const { createResponse, getResponseByExternalId } = require('../repositories/response-repository');
+const { createResponse, getResponseByExternalId, getClaimSecret } = require('../repositories/response-repository');
 const { enqueueJob } = require('../repositories/job-repository');
 const { findQuestionIdByPrefix } = require('../repositories/question-repository');
 const { createId, normalizeCity, nowIso, toNullableNumber } = require('../utils/helpers');
 const { HttpError } = require('../utils/http-error');
 const { broadcastEvent } = require('./sse-service');
 
-async function ingestResponse(payload) {
-  const deviceId = String(payload.deviceId || '').trim();
-  if (!deviceId) {
-    throw new HttpError(400, 'deviceId is required');
-  }
+// Per question, so stored keys cannot link the answers of one device together.
+async function claimKeyFor(deviceKey, questionId) {
+  return crypto.createHmac('sha256', await getClaimSecret())
+    .update(`${deviceKey}\n${questionId}`).digest('hex');
+}
+
+/**
+ * `deviceKey` identifies the phone/browser and is never stored; `deviceId` is
+ * the generic label kept with the answer. Administrators may answer repeatedly.
+ */
+async function ingestResponse(payload, { admin, deviceKey, deviceId }) {
 
   const externalId = String(payload.responseId || payload.externalId || '').trim() || null;
   if (externalId) {
@@ -27,6 +34,9 @@ async function ingestResponse(payload) {
   // Resolve the full questionId — BLE protocol truncates IDs to 10 chars,
   // so do a prefix lookup to find the real FK value (or null if not found).
   const resolvedQuestionId = await findQuestionIdByPrefix(payload.questionId || null);
+  if (!admin && !resolvedQuestionId) {
+    throw new HttpError(410, 'Esta pergunta não está mais disponível.');
+  }
   const response = {
     id: createId('rsp'),
     externalId,
@@ -38,7 +48,8 @@ async function ingestResponse(payload) {
     latitude: toNullableNumber(payload.latitude),
     longitude: toNullableNumber(payload.longitude),
     status: 'pending',
-    rawPayload: payload,
+    rawPayload: { ...payload, deviceId },
+    claimKey: admin ? null : await claimKeyFor(deviceKey, resolvedQuestionId),
     submittedAt: payload.submittedAt || null,
     receivedAt: nowIso(),
     processedAt: null,
@@ -54,7 +65,12 @@ async function ingestResponse(payload) {
     status: 'active',
   });
 
-  await createResponse(response);
+  if (!await createResponse(response)) {
+    // Same answer sent twice at once, or a second answer to the question.
+    const existing = externalId && await getResponseByExternalId(externalId);
+    if (existing) return { created: false, response: mapResponseRow(existing) };
+    throw new HttpError(409, 'Este dispositivo já respondeu a esta pergunta.');
+  }
   await enqueueJob({
     jobType: 'process_response',
     entityType: 'response',
@@ -68,9 +84,10 @@ async function ingestResponse(payload) {
   // Only a signal: dashboards refetch their own (scoped) data.
   broadcastEvent('response', { id: response.id, receivedAt: response.receivedAt });
 
+  const { claimKey, ...stored } = response;
   return {
     created: true,
-    response,
+    response: stored,
   };
 }
 

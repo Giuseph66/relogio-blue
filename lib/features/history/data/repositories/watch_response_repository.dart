@@ -1,10 +1,14 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
+import '../../../../core/auth/auth_service.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/device/device_identity.dart';
 import '../../../../core/logger/app_logger.dart';
+import '../../../../core/platform/browser_bridge.dart';
 import '../../domain/entities/watch_response.dart';
 import '../datasources/watch_response_dao.dart';
 
@@ -169,6 +173,15 @@ class WatchResponseRepository {
 
   Future<WatchResponse?> getById(String id) => _dao.getById(id);
 
+  /// True when this device already answered [questionId] (as sent to the
+  /// watch). Administrators may answer again.
+  Future<bool> isAnswerBlocked(String questionId) async {
+    if (await AuthService.isStoredAdmin()) return false;
+    return (await _dao.getAll()).any((r) =>
+        r.questionId == questionId &&
+        r.questionStatus == QuestionStatus.answered);
+  }
+
   // ─── Sync ─────────────────────────────────────────────────────────────────
 
   /// Retry sync for a single answered record.
@@ -176,6 +189,7 @@ class WatchResponseRepository {
     final r = await _dao.getById(id);
     if (r == null) return;
     if (r.questionStatus != QuestionStatus.answered) return;
+    if (r.syncStatus == SyncStatus.rejected) return;
     await _trySend(r, serverUrl);
   }
 
@@ -191,6 +205,8 @@ class WatchResponseRepository {
 
   Future<void> _trySend(WatchResponse response, String serverUrl) async {
     if (response.answerId == null || response.answerId!.isEmpty) return;
+    // Kept for when the installed app is opened.
+    if (!DeviceIdentity.canAnswer) return;
     try {
       final base = serverUrl.trim();
       if (base.isEmpty) return;
@@ -200,8 +216,14 @@ class WatchResponseRepository {
           : 'https://$base';
       final uri = Uri.parse('$normalized/api/responses');
 
+      final deviceId = await DeviceIdentity.read();
+      if (!kIsWeb && deviceId == null) return; // stays pending
+      final adminToken = await AuthService.storedAdminToken();
+
       final payload = {
-        'deviceId': 'mobile-app',
+        // Same id on every retry: the server stores it only once.
+        'responseId': response.id,
+        'deviceId': ?deviceId,
         'questionId': response.questionId,
         'answerId': response.answerId,
         'locationId': response.locationId,
@@ -213,7 +235,10 @@ class WatchResponseRepository {
         uri,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${AppConfig.appAuthToken}',
+          if (AppConfig.appAuthToken != '')
+            'Authorization': 'Bearer ${AppConfig.appAuthToken}',
+          'X-Admin-Session': ?adminToken,
+          if (kIsWeb && BrowserBridge.isStandalone) 'X-GeoNexo-App': 'pwa',
         },
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 5));
@@ -221,6 +246,10 @@ class WatchResponseRepository {
       if (httpResponse.statusCode >= 200 && httpResponse.statusCode < 300) {
         await _dao.updateStatus(response.id, SyncStatus.synced);
         AppLogger.info('WatchResponseRepository: synced ${response.id}');
+      } else if (httpResponse.statusCode == 409 || httpResponse.statusCode == 410) {
+        // Already answered from this device, or the question no longer exists.
+        await _dao.updateStatus(response.id, SyncStatus.rejected);
+        AppLogger.info('WatchResponseRepository: rejected ${response.id}');
       } else {
         await _dao.updateStatus(response.id, SyncStatus.failed);
         AppLogger.warning(

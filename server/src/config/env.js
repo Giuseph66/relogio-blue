@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -14,6 +15,12 @@ loadEnvFiles([
   path.join(ROOT_DIR, '.env'),
   path.join(ROOT_DIR, '.env.local'),
 ]);
+
+// No well-known default: without ADMIN_PASSWORD nobody can sign in as admin.
+function unsetAdminPassword() {
+  console.warn('[server] ADMIN_PASSWORD não definida: login de administrador desativado.');
+  return crypto.randomBytes(32).toString('hex');
+}
 
 function loadEnvFiles(filePaths) {
   for (const filePath of filePaths) {
@@ -47,6 +54,8 @@ function loadEnvFiles(filePaths) {
 module.exports = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   PORT: Number(process.env.PORT || 3001),
+  // Who may set X-Forwarded-*: the reverse proxy in front of Node.
+  TRUST_PROXY: process.env.TRUST_PROXY || 'loopback',
   HOST: process.env.HOST || '0.0.0.0',
   VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY || '',
   VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY || '',
@@ -59,7 +68,7 @@ module.exports = {
   INTERNAL_AUTH_TOKEN: process.env.INTERNAL_AUTH_TOKEN || 'dev-internal-token',
   ENABLE_APP_AUTH: asBoolean(process.env.ENABLE_APP_AUTH, true),
   ADMIN_EMAIL: process.env.ADMIN_EMAIL || 'admin@gmail.com',
-  ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || 'admin123',
+  ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || unsetAdminPassword(),
   ADMIN_COOKIE_NAME: process.env.ADMIN_COOKIE_NAME || 'rb_admin_session',
   ADMIN_COOKIE_SECRET:
     process.env.ADMIN_COOKIE_SECRET || 'relogio-blutu-admin-secret',

@@ -3,8 +3,10 @@ import 'dart:async';
 import 'dart:isolate';
 import 'dart:ui';
 
+import '../../../../core/auth/auth_service.dart';
 import '../../../../core/ble/ble_question_protocol.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/device/device_identity.dart';
 import '../../../../core/logger/app_logger.dart';
 import '../../../../core/notifications/question_notification_service.dart';
 import '../../../../core/offline/offline_question_cache.dart';
@@ -94,6 +96,7 @@ class VisitQuestionOrchestrator {
         'VisitQuestionOrchestrator: parse result=$result isAnswer=${result?.isAnswer} qId=${result?.questionId}',
       );
       if (result == null || !result.isAnswer) return;
+      if (!DeviceIdentity.canAnswer) return;
 
       // The questionId in the QANS is already the sanitized (≤18 char) version
       // because that's what was transmitted in the QST command.
@@ -241,14 +244,18 @@ class VisitQuestionOrchestrator {
   }
 
   /// Called when a geofence visit is detected.
-  /// Manual catalog sends can alert the phone again using its unanswered record.
-  Future<bool> handleVisit(
+  /// Manual catalog sends (administrators only) can alert the phone again using
+  /// its unanswered record.
+  Future<VisitResult> handleVisit(
     TrackedLocation location, {
     double? latitude,
     double? longitude,
     String? city,
     bool resendToPhone = false,
   }) async {
+    if (resendToPhone && !AuthService().isAuthenticated) {
+      return VisitResult.adminOnly;
+    }
     try {
       final question = await resolveQuestionFor(
         location,
@@ -259,7 +266,7 @@ class VisitQuestionOrchestrator {
 
       if (question == null) {
         AppLogger.info('VisitQuestionOrchestrator: no questions for ${location.name}');
-        return false;
+        return VisitResult.unavailable;
       }
 
       final prompt = BleQuestionPrompt(
@@ -270,13 +277,19 @@ class VisitQuestionOrchestrator {
             .toList(),
       );
 
-      if (prompt.options.length < bleQuestionMinOptions) return false;
+      if (prompt.options.length < bleQuestionMinOptions) {
+        return VisitResult.unavailable;
+      }
 
       final command = buildBleQuestionCommand(prompt);
 
       // ── Extract the sanitized questionId that was actually put in the
       // command — this is what the watch will echo back in the QANS.
       final safeQuestionId = _extractCommandId(command);
+
+      if (await _responseRepository.isAnswerBlocked(safeQuestionId)) {
+        return VisitResult.alreadyAnswered;
+      }
 
       if (resendToPhone) {
         for (final record in await _responseRepository.getAll()) {
@@ -292,17 +305,18 @@ class VisitQuestionOrchestrator {
             command: command,
             forceNotify: true,
           );
-          return true;
+          return VisitResult.asked;
         }
       }
 
       // Skip if we're already waiting for an answer to this question.
-      if (_pending.containsKey(safeQuestionId)) return false;
+      if (_pending.containsKey(safeQuestionId)) return VisitResult.unavailable;
 
       // ── Check connection ────────────────────────────────────────────────
       // Accept: watch is actively ticking (online) OR BLE is connected.
-      final watchAvailable =
-          _messagesController.isWatchOnline || _messagesController.isWatchConnected;
+      // A browser tab keeps the question for the installed app.
+      final watchAvailable = DeviceIdentity.canAnswer &&
+          (_messagesController.isWatchOnline || _messagesController.isWatchConnected);
 
       if (!watchAvailable) {
         AppLogger.info('VisitQuestionOrchestrator: watch offline for ${location.name}');
@@ -318,12 +332,12 @@ class VisitQuestionOrchestrator {
           recordId: offlineRecord.id,
           command: command,
         );
-        return true;
+        return VisitResult.asked;
       }
 
       // ── Send question ───────────────────────────────────────────────────
       final sent = await _messagesController.sendMessage(command);
-      if (!sent) return false;
+      if (!sent) return VisitResult.unavailable;
 
       AppLogger.info('VisitQuestionOrchestrator: question sent for ${location.name}');
 
@@ -341,10 +355,10 @@ class VisitQuestionOrchestrator {
         recordId: record.id,
         command: command,
       );
-      return true;
+      return VisitResult.asked;
     } catch (e) {
       AppLogger.warning('VisitQuestionOrchestrator: handleVisit error: $e');
-      return false;
+      return VisitResult.unavailable;
     }
   }
 
@@ -358,6 +372,11 @@ class VisitQuestionOrchestrator {
     // so the QANS reply fits in a single 20-byte BLE packet.
     final command = normalizeBleCommandId(r.questionCommand!);
     final safeQuestionId = _extractCommandId(command);
+
+    if (!DeviceIdentity.canAnswer) return ResendResult.installRequired;
+    if (await _responseRepository.isAnswerBlocked(r.questionId)) {
+      return ResendResult.alreadyAnswered;
+    }
 
     if (_pending.containsKey(safeQuestionId)) {
       return ResendResult.alreadyPending;
@@ -425,4 +444,8 @@ enum ResendResult {
   noCommand,
   alreadyPending,
   sendFailed,
+  alreadyAnswered,
+  installRequired,
 }
+
+enum VisitResult { asked, alreadyAnswered, adminOnly, unavailable }

@@ -1,13 +1,15 @@
 const { getDb } = require('../db/connection');
 
+// False when this answer, or another from the same device, is already stored.
 async function createResponse(response) {
   const db = await getDb();
-  await db.run(
+  const result = await db.run(
     `
       INSERT INTO responses (
         id, external_id, device_id, question_id, answer_id, answer_text, city, latitude,
-        longitude, status, raw_payload_json, submitted_at, received_at, processed_at, error_message
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        longitude, status, raw_payload_json, submitted_at, received_at, processed_at, error_message, claim_key
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT DO NOTHING
     `,
     [
       response.id,
@@ -25,8 +27,15 @@ async function createResponse(response) {
       response.receivedAt,
       response.processedAt,
       response.errorMessage,
+      response.claimKey,
     ],
   );
+  return result.changes === 1;
+}
+
+async function getClaimSecret() {
+  const row = await (await getDb()).get(`SELECT value FROM app_settings WHERE key = 'device_claim_secret'`);
+  return row.value;
 }
 
 async function getResponseByExternalId(externalId) {
@@ -184,6 +193,7 @@ async function listTopResponseCities(limit = 6) {
 }
 
 module.exports = {
+  getClaimSecret,
   createResponse,
   getResponseByExternalId,
   getResponseById,

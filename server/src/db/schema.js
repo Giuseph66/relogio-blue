@@ -10,6 +10,39 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   last_test_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS app_users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+-- Only the SHA-256 of each session token is stored.
+CREATE TABLE IF NOT EXISTS app_user_sessions (
+  token_hash TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES app_users(id) ON DELETE CASCADE
+);
+
+-- Personal data: never joined with responses or exposed by public endpoints.
+CREATE TABLE IF NOT EXISTS user_profiles (
+  user_id TEXT PRIMARY KEY,
+  data_json TEXT NOT NULL,
+  revision INTEGER NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES app_users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_user_sessions_user
+  ON app_user_sessions(user_id);
+
 CREATE TABLE IF NOT EXISTS devices (
   id TEXT PRIMARY KEY,
   name TEXT,

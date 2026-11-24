@@ -55,3 +55,7 @@ app.*.map.json
 
 # Local secrets (API keys) - never commit
 /android/secrets.properties
+
+# Docker
+/.env
+/dist/

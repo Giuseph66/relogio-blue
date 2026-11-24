@@ -144,6 +144,27 @@ com hashes de todos os recursos, inclusive o renderer local do Flutter.
 Arquivos ausentes retornam 404 e respostas da API não entram no cache HTTP da PWA.
 
 Visitantes recebem uma sessão própria, sem acesso administrativo.
+
+#### Perfil e conta (opcionais)
+
+Na aba **Perfil**, qualquer pessoa pode preencher nome, data de nascimento, sexo,
+onde mora, ocupação, trabalho, estudos e "sobre mim". Nenhum campo é obrigatório.
+
+- **Sem conta:** o perfil fica só no aparelho/navegador e nunca vai ao servidor.
+- **Com conta** (`Perfil → Criar conta`): APK e PWA usam o mesmo e-mail/senha e o
+  mesmo perfil. Criar conta e entrar exigem internet; depois, ver e editar funcionam
+  offline e sincronizam ao reconectar, combinando campo a campo as edições de outro aparelho.
+- A primeira conta sem perfil herda o que foi preenchido como visitante.
+- Contas não dão acesso administrativo. Perfis não aparecem no painel público, nos
+  dados abertos nem nas respostas. É possível apagar o perfil ou a conta na própria aba.
+- Senhas usam scrypt; o servidor guarda só o hash dos tokens de sessão (180 dias).
+  Em produção use HTTPS também no APK (`--dart-define=API_BASE_URL=https://...`):
+  o padrão de desenvolvimento é HTTP e enviaria a senha sem criptografia.
+- Não há recuperação de senha por e-mail.
+
+API: `/api/account` (`register`, `login`, `session`, `logout`, `profile`). As tabelas
+`app_users`, `app_user_sessions` e `user_profiles` são criadas ao iniciar o servidor.
+
 O login web usa `ADMIN_EMAIL` e `ADMIN_PASSWORD` do servidor e cookie HttpOnly.
 Configure credenciais e `ADMIN_COOKIE_SECRET` próprios no ambiente de produção.
 O token compartilhado do APK não é incluído no cliente web.
@@ -196,6 +217,72 @@ O Android nativo conserva seus serviços existentes.
 Validação física necessária antes da distribuição: parear o relógio real,
 enviar `QST`, receber `QANS`, testar reconexão, visita, perda de internet e
 sincronização. Testes de navegador não comprovam compatibilidade de hardware.
+
+## Subir tudo com Docker
+
+Precisa apenas de Docker com Compose. Na raiz do projeto:
+
+```bash
+docker compose up -d --build
+docker compose exec app grep ADMIN_PASSWORD /data/config.env   # senha do admin
+```
+
+Abra `http://localhost/` (painel público), `http://localhost/admin/login` e
+`http://localhost/app/` (aplicativo web). O primeiro build compila a PWA e demora;
+os próximos usam cache. Sobem três contêineres: `app` (API, painéis e PWA), `jobs`
+(processa respostas, no lugar do cron) e `proxy` (Caddy).
+
+- **Configuração:** nada é obrigatório. Segredos e chaves de Web Push são gerados na
+  primeira subida. Para mudar algo, `cp .env.docker.example .env`, edite e suba de novo.
+- **Domínio e HTTPS:** `SITE_ADDRESS=geo.exemplo.edu.br` no `.env`, com portas 80/443
+  abertas. Em celulares, GPS, instalação, Bluetooth e avisos da PWA **exigem HTTPS**;
+  `http://IP-da-rede` só serve para ver as páginas.
+- **APK:** defina `API_BASE_URL` no `.env`, suba o servidor e rode
+  `docker compose run --rm --build apk`. Sai em `dist/geonexo.apk`, já com o token deste
+  servidor. A primeira vez baixa o Android SDK/NDK (vários GB; cerca de 20 min).
+  Se o APK foi gerado com outro servidor/token, gere de novo. A chave de assinatura fica no volume
+  `geonexo_android-keys`: **não o apague**, ou os aparelhos não atualizam o app e passam
+  a ser vistos como novos. APKs gerados fora do Docker usam outra chave e outro token.
+- **Dados:** ficam no volume `geonexo_data`. `docker compose down` preserva;
+  `docker compose down -v` **apaga tudo**.
+
+Trazer o banco já existente (substitui o do volume):
+
+```bash
+docker compose stop app jobs
+docker compose run --rm --no-deps -v "$PWD/server/data:/import:ro" app sh -c 'cp /import/app.db /data/app.db'
+docker compose up -d
+```
+
+Backup, com o sistema no ar (grava `backup.db` na pasta atual):
+
+```bash
+docker compose exec app node -e "new (require('sqlite3').Database)('/data/app.db').exec(\"VACUUM INTO '/data/backup.db'\", e => { if (e) throw e; })"
+docker compose cp app:/data/backup.db ./backup.db && docker compose exec app rm /data/backup.db
+```
+
+## Uma resposta por dispositivo
+
+O servidor aceita **uma resposta por pergunta e por dispositivo**; a repetição recebe 409
+e aparece no histórico como "Não contabilizada". Administradores podem repetir, desde que
+a sessão tenha sido validada pelo servidor (no APK, entre como admin com internet).
+
+- **APK:** o MAC não é acessível a aplicativos Android. Usa-se o hash do `ANDROID_ID`, que
+  resiste a limpar dados e reinstalar; muda ao restaurar o aparelho de fábrica, em outro
+  perfil/usuário do Android ou se a chave de assinatura mudar.
+- **Site aberto numa aba:** não responde (nem pelo relógio); mostra o botão **Instalar
+  aplicativo**. O servidor recusa com 403. Só a PWA instalada e o APK respondem; admin pode
+  responder de qualquer lugar.
+- **PWA instalada:** navegadores não expõem identificador de hardware. Usa-se um cookie
+  HttpOnly; limpar os dados do site, instalar por outro navegador ou, no iPhone, remover e
+  adicionar de novo à Tela de Início contornam. O servidor não consegue provar que a página
+  está instalada: quem forja a requisição passa.
+- APK e PWA no mesmo celular contam como dois dispositivos. Quem extrair o token do APK e
+  chamar a API diretamente pode inventar dispositivos.
+- **Catálogo:** só administradores veem e usam **Enviar / reenviar notificação**.
+- O identificador não é gravado: só um HMAC por pergunta, que não liga respostas entre si.
+- APKs antigos recebem 426; as respostas ficam no aparelho e são enviadas após atualizar.
+  Respostas anteriores à regra são mantidas e não bloqueiam ninguém.
 
 ## Guia de execução e publicação no servidor do professor
 
@@ -563,8 +650,9 @@ O APK estará em `build/app/outputs/flutter-apk/app-release.apk`. Para instalar 
 um Android conectado por USB, use `adb install -r` com esse arquivo. O token deve
 ser o mesmo `APP_AUTH_TOKEN` do `.env`. O token embutido em um aplicativo
 compilado é recuperável; não equivale a uma credencial individual por usuário.
-O login nativo ainda usa os valores de `lib/core/auth/auth_service.dart`,
-independentes do login web configurado no servidor.
+O APK guarda só o hash da senha de administrador (`lib/core/auth/auth_service.dart`), para abrir
+as telas de admin sem internet. Entrando online, valem também `ADMIN_EMAIL`/`ADMIN_PASSWORD` do
+servidor; use a mesma senha nos dois. Só a sessão validada pelo servidor libera repetir respostas. Contas de usuário são validadas no servidor.
 
 O projeto atualmente usa assinatura de **debug** também na configuração release.
 Antes de distribuir oficialmente/Play Store, configure keystore/assinatura de

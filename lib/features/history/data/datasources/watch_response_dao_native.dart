@@ -77,6 +77,7 @@ class WatchResponseDao {
     );
   }
 
+  /// The first answer stands; later ones are ignored.
   Future<void> markAnswered(String id, String answerId) async {
     final db = await _db;
     await db.update(
@@ -86,8 +87,8 @@ class WatchResponseDao {
         'answer_id': answerId,
         'sync_status': SyncStatus.pending.name,
       },
-      where: 'id = ?',
-      whereArgs: [id],
+      where: 'id = ? AND question_status != ?',
+      whereArgs: [id, QuestionStatus.answered.name],
     );
   }
 

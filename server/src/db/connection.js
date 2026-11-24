@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const sqlite3 = require('sqlite3');
@@ -28,6 +29,17 @@ async function initDatabase() {
           COMMIT;
         `);
       }
+      // One answer per device and question. NULL (administrators and answers from
+      // before this rule) never conflicts.
+      const responseColumns = await db.all('PRAGMA table_info(responses)');
+      if (!responseColumns.some((column) => column.name === 'claim_key')) {
+        await db.exec('ALTER TABLE responses ADD COLUMN claim_key TEXT');
+      }
+      await db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_responses_claim ON responses(claim_key)');
+      await db.run(
+        "INSERT INTO app_settings (key, value) VALUES ('device_claim_secret', ?) ON CONFLICT(key) DO NOTHING",
+        [crypto.randomBytes(32).toString('hex')],
+      );
       await seedDatabase(db, SEED_SAMPLE_DATA);
       return db;
     })();

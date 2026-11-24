@@ -16,10 +16,13 @@
     else if (value.type === 'question.open') pendingQuestionOpen = value;
   };
 
+  // The window itself runs as an app; a tab that has just installed it does not.
+  const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+
   function notificationStatus() {
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    const installed = installedDuringSession || window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    const installed = installedDuringSession || isStandalone();
     return {
       supported: window.isSecureContext && 'Notification' in window && 'serviceWorker' in navigator,
       permission: 'Notification' in window ? Notification.permission : 'unavailable',
@@ -345,6 +348,7 @@
     get bluetoothSupported() { return window.isSecureContext && !!navigator.bluetooth; },
     get updateAvailable() { return window.geonexoUpdateAvailable === true; },
     notifyUpdate() { window.geonexoUpdateAvailable = true; emit({ type: 'update' }); },
+    get isStandalone() { return isStandalone(); },
     get isVisible() { return document.visibilityState === 'visible'; },
     listen(callback) {
       listener = callback;

@@ -10,6 +10,7 @@ const {
   ADMIN_SESSION_HOURS,
 } = require('../config/env');
 const crypto = require('crypto');
+const { findSessionUser } = require('../repositories/account-repository');
 
 function extractToken(req) {
   const authHeader = req.headers.authorization || '';
@@ -36,7 +37,10 @@ function requireAppAuth(options = {}) {
       return;
     }
 
-    res.status(401).json({ error: 'unauthorized' });
+    getAccountSession(req).then((session) => {
+      if (session) next();
+      else res.status(401).json({ error: 'unauthorized' });
+    }, next);
   };
 }
 
@@ -103,7 +107,8 @@ function deserializeSession(token) {
 
 function getAdminSession(req) {
   const cookies = parseCookies(req);
-  const sessionToken = cookies[ADMIN_COOKIE_NAME];
+  // Header: native app, which has no cookies.
+  const sessionToken = cookies[ADMIN_COOKIE_NAME] || req.headers['x-admin-session'];
   const session = deserializeSession(sessionToken);
   return session && !session.type ? session : null;
 }
@@ -120,6 +125,46 @@ function setAppSessionCookie(res) {
 }
 function clearAppSessionCookie(res) {
   res.clearCookie(APP_COOKIE_NAME, { httpOnly: true, sameSite: 'lax', path: '/' });
+}
+
+// Participant accounts: opaque token in a cookie (PWA) or Bearer header (APK).
+const ACCOUNT_COOKIE_NAME = 'geonexo_account';
+const ACCOUNT_SESSION_MS = 180 * 24 * 3600000; // long: the app works offline for weeks
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+async function getAccountSession(req) {
+  const token = extractToken(req) || parseCookies(req)[ACCOUNT_COOKIE_NAME];
+  if (!token) return null;
+  const tokenHash = hashToken(token);
+  const user = await findSessionUser(tokenHash, Date.now());
+  return user ? { user, tokenHash } : null;
+}
+
+function requireAccount(req, res, next) {
+  getAccountSession(req).then((session) => {
+    if (!session) {
+      res.status(401).json({ error: 'Sessão expirada. Entre novamente.' });
+      return;
+    }
+    req.account = session;
+    next();
+  }, next);
+}
+
+function accountCookieOptions(req) {
+  return {
+    httpOnly: true, sameSite: 'lax', path: '/',
+    secure: req.secure,
+  };
+}
+function setAccountCookie(req, res, token) {
+  res.cookie(ACCOUNT_COOKIE_NAME, token, { ...accountCookieOptions(req), maxAge: ACCOUNT_SESSION_MS });
+}
+function clearAccountCookie(req, res) {
+  res.clearCookie(ACCOUNT_COOKIE_NAME, accountCookieOptions(req));
 }
 
 function createAdminSession(email = ADMIN_EMAIL) {
@@ -185,6 +230,8 @@ function validateAdminCredentials(email, password) {
 }
 
 module.exports = {
+  extractToken, parseCookies,
+  ACCOUNT_SESSION_MS, hashToken, getAccountSession, requireAccount, setAccountCookie, clearAccountCookie,
   getAppSession, setAppSessionCookie, clearAppSessionCookie,
   requireAppAuth,
   requireLegacyMessagePostAuth,

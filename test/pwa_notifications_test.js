@@ -52,6 +52,18 @@ test('installation hint can be dismissed and stays absent in standalone mode', a
   assert.equal((await call(browser({ ios: true, installed: true }).bridge, 'app.status')).value.installed, true);
 });
 
+test('only the installed window counts as standalone, not a tab that just installed', () => {
+  assert.equal(browser({ installed: false }).bridge.isStandalone, false);
+  assert.equal(browser({ installed: true }).bridge.isStandalone, true);
+  const listeners = {};
+  const window = { matchMedia: () => ({ matches: false }), isSecureContext: true,
+    addEventListener(type, callback) { listeners[type] = callback; } };
+  vm.runInNewContext(source, { window, navigator: {}, URL, Uint8Array, Promise, Map,
+    document: { baseURI: 'https://example.test/app/', addEventListener() {} } });
+  listeners.appinstalled();
+  assert.equal(window.geonexo.isStandalone, false);
+});
+
 test('installed iPhone requests notification permission directly in the click call', async () => {
   const env = browser({ ios: true });
   const result = env.bridge.call('notifications.request', '{}');

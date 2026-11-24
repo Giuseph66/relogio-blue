@@ -10,6 +10,8 @@ external void _listen(JSFunction callback);
 external bool get _bluetoothSupported;
 @JS('geonexo.updateAvailable')
 external bool get _updateAvailable;
+@JS('geonexo.isStandalone')
+external bool get _isStandalone;
 @JS('geonexo.isVisible')
 external bool get _isVisible;
 
@@ -19,6 +21,7 @@ class BrowserBridge {
   static bool get bluetoothSupported => _bluetoothSupported;
   static bool get updateAvailable => _updateAvailable;
   static bool get isVisible => _isVisible;
+  static bool get isStandalone => _isStandalone;
 
   static Stream<Map<String, dynamic>> get events {
     if (!_listening) {

@@ -10,6 +10,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../../features/history/data/repositories/watch_response_repository.dart';
 import '../ble/ble_question_protocol.dart';
 import '../config/app_config.dart';
+import '../device/device_identity.dart';
 import '../logger/app_logger.dart';
 import 'notification_service.dart';
 
@@ -167,6 +168,7 @@ class QuestionNotificationService {
 
   static Future<void> answerFromWeb(QuestionNotificationPayload payload, String answerId) async {
     if (!payload.options.any((option) => option.id == answerId)) return;
+    if (!DeviceIdentity.canAnswer) throw StateError('Abra o aplicativo instalado para responder.');
     final saved = await WatchResponseRepository().saveAnswerFromPhone(
       recordId: payload.recordId, questionId: payload.questionId, answerId: answerId,
       locationId: payload.locationId, locationName: payload.locationName,

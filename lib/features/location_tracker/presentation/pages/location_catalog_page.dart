@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../auth/presentation/widgets/auth_guard.dart';
+import '../controllers/visit_question_orchestrator.dart';
 import '../../../../core/di/dependency_injection.dart';
 import '../controllers/location_tracker_controller.dart';
 import '../../domain/entities/location_question.dart';
@@ -138,7 +140,7 @@ class _LocationCatalogPageState extends State<LocationCatalogPage>
                       icon: const Icon(Icons.refresh),
                       label: const Text('Buscar perguntas'),
                     ),
-                    TextButton.icon(
+                    AuthGuard(child: TextButton.icon(
                       onPressed: _sendingId == null
                           ? () => _sendNotification(loc)
                           : null,
@@ -150,7 +152,7 @@ class _LocationCatalogPageState extends State<LocationCatalogPage>
                             )
                           : const Icon(Icons.notifications_active_outlined),
                       label: const Text('Enviar / reenviar notificação'),
-                    ),
+                    )),
                   ],
                 ),
               ),
@@ -170,7 +172,7 @@ class _LocationCatalogPageState extends State<LocationCatalogPage>
   /// Opens the location question on this device without recording a GPS visit.
   Future<void> _sendNotification(TrackedLocation loc) async {
     setState(() => _sendingId = loc.id);
-    final triggered = await DependencyInjection().visitQuestionOrchestrator
+    final result = await DependencyInjection().visitQuestionOrchestrator
         .handleVisit(loc, resendToPhone: true);
     if (!mounted) return;
     setState(() => _sendingId = null);
@@ -178,11 +180,18 @@ class _LocationCatalogPageState extends State<LocationCatalogPage>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          triggered
-              ? 'Pergunta de ${loc.name} aberta neste dispositivo. '
-                    'O aviso do celular depende da permissão em Ajustes.'
-              : 'Não foi possível enviar. Verifique se ${loc.name} tem uma '
+          switch (result) {
+            VisitResult.asked =>
+              'Pergunta de ${loc.name} aberta neste dispositivo. '
+                    'O aviso do celular depende da permissão em Ajustes.',
+            VisitResult.alreadyAnswered =>
+              'Este dispositivo já respondeu à pergunta de ${loc.name}.',
+            VisitResult.adminOnly =>
+              'Só administradores podem reenviar perguntas.',
+            VisitResult.unavailable =>
+              'Não foi possível enviar. Verifique se ${loc.name} tem uma '
                     'pergunta ativa com pelo menos duas opções e tente novamente.',
+          },
         ),
       ),
     );

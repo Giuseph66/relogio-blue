@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'settings_tiles.dart';
 import '../auth/auth_service.dart';
+import '../device/device_identity.dart';
 import '../ble/ble_question_protocol.dart';
 import '../../features/history/data/repositories/watch_response_repository.dart';
 import '../../features/history/domain/entities/watch_response.dart';
@@ -162,6 +163,7 @@ class _WebAppShellState extends State<WebAppShell> {
     super.initState();
     AuthService().isAuthenticatedNotifier.addListener(_authChanged);
     AuthService().isGuestNotifier.addListener(_authChanged);
+    AuthService().accountNotifier.addListener(_authChanged);
     GeofenceService().status.addListener(_gpsChanged);
     _requestedQuestionId = Uri.base.queryParameters['question'];
     _requestedAnswerId = Uri.base.queryParameters['answer'];
@@ -381,6 +383,7 @@ class _WebAppShellState extends State<WebAppShell> {
             row.questionCommand == null) {
           continue;
         }
+        if (await WatchResponseRepository().isAnswerBlocked(row.questionId)) continue;
         final prompt = tryParseBleQuestionCommand(row.questionCommand!);
         if (prompt == null) continue;
         await QuestionNotificationService().showQuestion(
@@ -487,6 +490,10 @@ class _WebAppShellState extends State<WebAppShell> {
     QuestionNotificationPayload question,
     String answer,
   ) async {
+    if (!DeviceIdentity.canAnswer) {
+      _refresh(() => _message = 'Para responder, abra o GeoNexo pelo ícone na tela inicial.');
+      return;
+    }
     _refresh(() {
       _answering = true;
       _message = null;
@@ -504,6 +511,7 @@ class _WebAppShellState extends State<WebAppShell> {
   void dispose() {
     AuthService().isAuthenticatedNotifier.removeListener(_authChanged);
     AuthService().isGuestNotifier.removeListener(_authChanged);
+    AuthService().accountNotifier.removeListener(_authChanged);
     GeofenceService().status.removeListener(_gpsChanged);
     _events?.cancel();
     _hintTimer?.cancel();
@@ -639,7 +647,18 @@ class _WebAppShellState extends State<WebAppShell> {
                             const SizedBox(height: 8),
                             Text(question.prompt),
                             const SizedBox(height: 12),
-                            for (final option in question.options)
+                            if (kIsWeb && !DeviceIdentity.canAnswer) ...[
+                              const Text(
+                                'Para responder, instale o GeoNexo e abra pelo ícone na tela inicial. '
+                                'Se já instalou, abra por lá.',
+                              ),
+                              const SizedBox(height: 12),
+                              FilledButton.icon(
+                                onPressed: _install,
+                                icon: const Icon(Icons.install_mobile_outlined),
+                                label: const Text('Instalar aplicativo'),
+                              ),
+                            ] else for (final option in question.options)
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 8),
                                 child: FilledButton(

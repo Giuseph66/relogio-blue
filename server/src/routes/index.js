@@ -14,6 +14,7 @@ const { adminDashboardRoutes } = require('./admin-dashboard-routes');
 const { discoveryRoutes } = require('./discovery-routes');
 const { internalRoutes } = require('./internal-routes');
 const { appSessionRoutes } = require('./app-session-routes');
+const { accountRoutes } = require('./account-routes');
 const { geocodingRoutes } = require('./geocoding-routes');
 const { pushRoutes, adminPushRoutes } = require('./push-routes');
 
@@ -27,6 +28,7 @@ router.use('/admin', adminPageRoutes);
 router.use('/api', legacyRoutes);
 router.use('/api/admin/auth', adminAuthRoutes);
 router.use('/api/app/auth', appSessionRoutes);
+router.use('/api/account', accountRoutes);
 router.use('/api/location', locationRoutes);
 router.use('/api/geocoding', geocodingRoutes);
 router.use('/api/push', pushRoutes);

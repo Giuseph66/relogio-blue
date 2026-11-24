@@ -1,11 +1,19 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import '../../../../core/config/app_config.dart';
 import '../../domain/entities/tracked_location.dart';
 import '../../domain/entities/location_question.dart';
 
 /// Fetches locations from the server filtered by the device's current position.
 class RemoteLocationDataSource {
+  static const _headers = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    if (AppConfig.appAuthToken != '')
+      'Authorization': 'Bearer ${AppConfig.appAuthToken}',
+  };
+
   final String baseUrl;
   final Duration timeout;
 
@@ -34,7 +42,7 @@ class RemoteLocationDataSource {
     final response = await http
         .post(
           uri,
-          headers: const {'Content-Type': 'application/json', 'Accept': 'application/json'},
+          headers: _headers,
           body: jsonEncode(body),
         )
         .timeout(timeout);
@@ -67,7 +75,7 @@ class RemoteLocationDataSource {
     final response = await http
         .post(
           uri,
-          headers: const {'Content-Type': 'application/json', 'Accept': 'application/json'},
+          headers: _headers,
           body: jsonEncode(body),
         )
         .timeout(timeout);
@@ -104,7 +112,7 @@ class RemoteLocationDataSource {
     final response = await http
         .post(
           uri,
-          headers: const {'Content-Type': 'application/json', 'Accept': 'application/json'},
+          headers: _headers,
           body: jsonEncode(body),
         )
         .timeout(timeout);

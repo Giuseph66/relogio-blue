@@ -25,6 +25,8 @@ import '../ui_mode/ui_mode_manager.dart';
 class AppRoutes {
   static const String home = '/';
   static const String login = '/login';
+  /// Route argument that opens [login] on "Criar conta".
+  static const String registerArgument = 'register';
   static const String dashboard = '/dashboard';
   static const String catalog = '/catalog';
   static const String connect = '/connect';
@@ -47,7 +49,7 @@ class AppRoutes {
     // Início (agora é Login)
     if (routeName == home || routeName == login) {
       return MaterialPageRoute(
-        builder: (_) => const LoginPage(),
+        builder: (_) => LoginPage(register: routeSettings.arguments == registerArgument),
         settings: routeSettings,
       );
     }

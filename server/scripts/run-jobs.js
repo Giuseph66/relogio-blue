@@ -5,7 +5,8 @@ if (!['process-pending', 'maintenance'].includes(action)) {
   console.error('Uso: node scripts/run-jobs.js process-pending|maintenance');
   process.exit(1);
 }
-fetch(`http://127.0.0.1:${PORT}/internal/jobs/${action}`, {
+const baseUrl = process.env.JOBS_BASE_URL || `http://127.0.0.1:${PORT}`;
+fetch(`${baseUrl}/internal/jobs/${action}`, {
   method: 'POST', headers: { Authorization: `Bearer ${INTERNAL_AUTH_TOKEN}` },
   signal: AbortSignal.timeout(60000),
 }).then(async response => {

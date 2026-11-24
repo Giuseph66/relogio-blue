@@ -58,6 +58,7 @@ dependencies:
   connectivity_plus: ^6.0.3
 
   # Utilities
+  crypto: ^3.0.0
   uuid: ^4.0.0
   flutter_map: ^8.3.2
   latlong2: ^0.10.1

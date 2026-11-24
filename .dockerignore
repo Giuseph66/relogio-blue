@@ -1,0 +1,24 @@
+# Lista do que entra na imagem; o resto (segredos, bancos, builds) fica fora.
+*
+!pubspec.yaml
+!pubspec.lock
+!analysis_options.yaml
+!assets
+!scripts
+!web
+!lib
+!android
+!docker
+!server
+server/.env*
+server/data
+server/node_modules
+server/public/app
+android/secrets.properties
+android/local.properties
+**/.gradle
+**/build
+**/.cxx
+**/*.keystore
+**/*.jks
+**/__pycache__

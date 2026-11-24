@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'core/widgets/web_app_shell.dart';
@@ -10,7 +12,9 @@ import 'core/notifications/notification_service.dart';
 
 import 'core/ui_mode/ui_mode_manager.dart';
 import 'core/auth/auth_service.dart';
+import 'core/device/device_identity.dart';
 import 'core/offline/offline_question_cache.dart';
+import 'features/profile/data/profile_service.dart';
 import 'features/permissions/presentation/pages/permission_gate.dart';
 
 void main() async {
@@ -25,7 +29,9 @@ void main() async {
   await ThemeController().init();
 
   // Restore authentication session
+  await DeviceIdentity.init();
   await AuthService().init();
+  await ProfileService().init();
 
   // Initialize dependency injection
   final di = DependencyInjection();
@@ -33,6 +39,7 @@ void main() async {
 
   // Start connectivity-aware sync service
   di.syncService.start();
+  unawaited(ProfileService().sync());
 
   runApp(const MyApp());
 }

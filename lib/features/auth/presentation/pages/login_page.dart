@@ -1,10 +1,15 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../../../core/auth/account_api.dart';
 import '../../../../core/auth/auth_service.dart';
 import '../../../../core/theme/app_palette.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  /// Opens on "Criar conta" instead of "Entrar".
+  final bool register;
+
+  const LoginPage({super.key, this.register = false});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -16,7 +21,10 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordCtrl = TextEditingController();
   bool _obscure = true;
   bool _loading = false;
-  String? _errorMsg;
+  late bool _register = widget.register;
+  String? _errorMsg = AuthService().sessionExpired
+      ? 'Sua sessão expirou. Entre novamente para sincronizar seu perfil.'
+      : null;
 
   @override
   void dispose() {
@@ -27,15 +35,28 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_register && _passwordCtrl.text.length < 8) {
+      setState(() => _errorMsg = 'A senha precisa ter pelo menos 8 caracteres.');
+      return;
+    }
     setState(() {
       _loading = true;
       _errorMsg = null;
     });
 
-    await Future.delayed(const Duration(milliseconds: 600));
-    final bool ok;
+    var ok = true;
     try {
-      ok = await AuthService().login(_emailCtrl.text, _passwordCtrl.text);
+      if (_register) {
+        await AuthService().register(_emailCtrl.text, _passwordCtrl.text);
+      } else {
+        ok = await AuthService().login(_emailCtrl.text, _passwordCtrl.text);
+      }
+    } on AccountException catch (error) {
+      if (mounted) setState(() {
+        _loading = false;
+        _errorMsg = error.message;
+      });
+      return;
     } catch (_) {
       if (mounted) setState(() {
         _loading = false;
@@ -46,14 +67,18 @@ class _LoginPageState extends State<LoginPage> {
 
     if (!mounted) return;
     if (ok) {
-      Navigator.of(context).pushReplacementNamed('/dashboard');
+      TextInput.finishAutofillContext();
+      _openApp();
     } else {
       setState(() {
         _loading = false;
-        _errorMsg = 'Credenciais inválidas. Verifique os dados.';
+        _errorMsg = 'E-mail ou senha incorretos.';
       });
     }
   }
+
+  void _openApp() => Navigator.of(context)
+      .pushNamedAndRemoveUntil('/dashboard', (_) => false);
 
   @override
   Widget build(BuildContext context) {
@@ -139,9 +164,12 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'GeoNexo Admin',
+                        _register
+                            ? 'Crie uma conta para usar o mesmo perfil no celular e no site'
+                            : 'Entre com sua conta (opcional)',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: context.palette.textPrimary.withValues(alpha: 0.5),
+                          color: context.palette.textSecondary,
                           fontSize: 15,
                           letterSpacing: 0.2,
                         ),
@@ -165,7 +193,7 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             child: Form(
                               key: _formKey,
-                              child: Column(
+                              child: AutofillGroup(child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   _buildField(
@@ -173,14 +201,17 @@ class _LoginPageState extends State<LoginPage> {
                                     label: 'E-mail',
                                     icon: Icons.alternate_email_rounded,
                                     type: TextInputType.emailAddress,
+                                    autofill: AutofillHints.username,
                                   ),
                                   const SizedBox(height: 20),
                                   _buildField(
                                     controller: _passwordCtrl,
-                                    label: 'Senha',
+                                    label: _register ? 'Senha (mínimo de 8 caracteres)' : 'Senha',
+                                    autofill: _register ? AutofillHints.newPassword : AutofillHints.password,
                                     icon: Icons.lock_person_outlined,
                                     obscure: _obscure,
                                     suffix: IconButton(
+                                      tooltip: _obscure ? 'Mostrar senha' : 'Ocultar senha',
                                       icon: Icon(
                                         _obscure 
                                             ? Icons.visibility_off_outlined
@@ -198,11 +229,24 @@ class _LoginPageState extends State<LoginPage> {
                                   const SizedBox(height: 32),
 
                                   _LoginButton(
+                                    label: _register ? 'CRIAR CONTA' : 'ENTRAR',
                                     loading: _loading,
                                     onPressed: _submit,
                                   ),
+                                  const SizedBox(height: 12),
+                                  TextButton(
+                                    onPressed: _loading
+                                        ? null
+                                        : () => setState(() {
+                                              _register = !_register;
+                                              _errorMsg = null;
+                                            }),
+                                    child: Text(_register
+                                        ? 'Já tenho conta'
+                                        : 'Criar conta'),
+                                  ),
                                 ],
-                              ),
+                              )),
                             ),
                           ),
                         ),
@@ -220,11 +264,11 @@ class _LoginPageState extends State<LoginPage> {
                             return;
                           }
                           if (context.mounted) {
-                            Navigator.of(context).pushReplacementNamed('/dashboard');
+                            _openApp();
                           }
                         },
                         style: TextButton.styleFrom(
-                          foregroundColor: context.palette.textPrimary.withValues(alpha: 0.38),
+                          foregroundColor: context.palette.textSecondary,
                           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                         ),
                         child: const Row(
@@ -245,6 +289,13 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
           ),
+          if (Navigator.of(context).canPop())
+            const SafeArea(
+              child: Padding(
+                padding: EdgeInsets.all(8),
+                child: BackButton(),
+              ),
+            ),
         ],
       ),
     );
@@ -255,6 +306,7 @@ class _LoginPageState extends State<LoginPage> {
     required String label,
     required IconData icon,
     TextInputType? type,
+    String? autofill,
     bool obscure = false,
     Widget? suffix,
   }) {
@@ -266,7 +318,7 @@ class _LoginPageState extends State<LoginPage> {
           child: Text(
             label,
             style: TextStyle(
-              color: context.palette.textPrimary.withValues(alpha: 0.38),
+              color: context.palette.textSecondary,
               fontSize: 13,
               fontWeight: FontWeight.w500,
             ),
@@ -276,6 +328,7 @@ class _LoginPageState extends State<LoginPage> {
           controller: controller,
           obscureText: obscure,
           keyboardType: type,
+          autofillHints: autofill == null ? null : [autofill],
           style: TextStyle(color: context.palette.textPrimary, fontSize: 15),
           decoration: InputDecoration(
             prefixIcon: Icon(icon, color: context.palette.accent.withValues(alpha: 0.5), size: 20),
@@ -326,10 +379,11 @@ class _BlurredSphere extends StatelessWidget {
 }
 
 class _LoginButton extends StatelessWidget {
+  final String label;
   final bool loading;
   final VoidCallback onPressed;
 
-  const _LoginButton({required this.loading, required this.onPressed});
+  const _LoginButton({required this.label, required this.loading, required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
@@ -366,7 +420,7 @@ class _LoginButton extends StatelessWidget {
                     ),
                   )
                 : Text(
-                    'ACESSAR PAINEL',
+                    label,
                     style: TextStyle(
                       color: context.palette.onAccent,
                       fontSize: 15,

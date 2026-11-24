@@ -1,4 +1,11 @@
-enum SyncStatus { pending, synced, failed }
+enum SyncStatus {
+  pending,
+  synced,
+  failed,
+
+  /// Final: the server does not accept it (e.g. already answered). Not retried.
+  rejected,
+}
 
 /// Lifecycle state of the question sent (or not sent) to the watch.
 enum QuestionStatus {

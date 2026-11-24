@@ -37,18 +37,21 @@ class _HistoryPageState extends State<HistoryPage> {
         SyncStatus.pending => context.palette.warning,
         SyncStatus.synced => context.palette.success,
         SyncStatus.failed => context.palette.danger,
+        SyncStatus.rejected => context.palette.textMuted,
       };
 
   IconData _syncIcon(SyncStatus s) => switch (s) {
         SyncStatus.pending => Icons.schedule,
         SyncStatus.synced => Icons.cloud_done_rounded,
         SyncStatus.failed => Icons.cloud_off_rounded,
+        SyncStatus.rejected => Icons.block_rounded,
       };
 
   String _syncLabel(SyncStatus s) => switch (s) {
         SyncStatus.pending => 'Pendente',
         SyncStatus.synced => 'Sincronizado',
         SyncStatus.failed => 'Falhou',
+        SyncStatus.rejected => 'Não contabilizada',
       };
 
   Color _questionColor(QuestionStatus s) => switch (s) {
@@ -367,7 +370,8 @@ class _DetailSheetState extends State<_DetailSheet> {
         r.questionCommand!.isNotEmpty;
 
     final canSync = r.questionStatus == QuestionStatus.answered &&
-        r.syncStatus != SyncStatus.synced;
+        r.syncStatus != SyncStatus.synced &&
+        r.syncStatus != SyncStatus.rejected;
 
     return Padding(
       padding: EdgeInsets.only(

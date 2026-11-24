@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../../core/config/app_config.dart';
+import '../../../../core/device/device_identity.dart';
 import '../../data/datasources/watch_response_dao.dart';
 import '../../data/repositories/watch_response_repository.dart';
 import '../../domain/entities/watch_response.dart';
@@ -57,6 +58,10 @@ class HistoryController extends ChangeNotifier {
         return 'Aguardando resposta do relógio...';
       case ResendResult.sendFailed:
         return 'Falha ao enviar para o relógio.';
+      case ResendResult.alreadyAnswered:
+        return 'Esta pergunta já foi respondida neste dispositivo.';
+      case ResendResult.installRequired:
+        return 'Para responder, abra o aplicativo instalado.';
     }
   }
 
@@ -65,11 +70,17 @@ class HistoryController extends ChangeNotifier {
     if (r.questionStatus != QuestionStatus.answered) {
       return 'Apenas respostas respondidas podem ser sincronizadas.';
     }
+    if (!DeviceIdentity.canAnswer) {
+      return 'Abra o aplicativo instalado para enviar a resposta.';
+    }
     await _repository.retrySingle(r.id, AppConfig.serverApiUrl);
     await load();
     final updated = _responses.firstWhere((x) => x.id == r.id, orElse: () => r);
-    return updated.syncStatus == SyncStatus.synced
-        ? 'Sincronizado com sucesso!'
-        : 'Falha ao sincronizar. Tente novamente.';
+    return switch (updated.syncStatus) {
+      SyncStatus.synced => 'Sincronizado com sucesso!',
+      SyncStatus.rejected =>
+        'Não contabilizada: este dispositivo já respondeu ou a pergunta foi removida.',
+      _ => 'Falha ao sincronizar. Tente novamente.',
+    };
   }
 }

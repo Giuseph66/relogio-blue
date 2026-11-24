@@ -1,13 +1,15 @@
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
-const { PUBLIC_DIR, PWA_DIR } = require('./config/env');
+const { PUBLIC_DIR, PWA_DIR, TRUST_PROXY } = require('./config/env');
 const { router } = require('./routes');
 const { notFoundHandler, errorHandler } = require('./middleware/error-handler');
 
 function createApp() {
   const app = express();
 
+  // Real client IP (login rate limit) and protocol (Secure cookies).
+  app.set('trust proxy', TRUST_PROXY);
   app.use(cors());
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true }));

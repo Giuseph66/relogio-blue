@@ -5,6 +5,7 @@ import 'dart:async';
 import '../logger/app_logger.dart';
 import '../network/connectivity_service.dart';
 import '../offline/offline_question_cache.dart';
+import '../../features/profile/data/profile_service.dart';
 import '../../features/history/data/repositories/watch_response_repository.dart';
 
 /// Listens for connectivity changes and triggers a sync of pending
@@ -29,7 +30,9 @@ class SyncService {
   void start() {
     _sub?.cancel();
     _sub = _connectivity.isOnline.listen((online) async {
-      if (!online || _isSyncing) return;
+      if (!online) return;
+      unawaited(ProfileService().sync());
+      if (_isSyncing) return;
       if (kIsWeb && !AuthService().hasAppSession) return;
       final url = _serverUrlProvider();
       if (url.isEmpty) return;
@@ -48,6 +51,7 @@ class SyncService {
 
   /// Trigger a manual sync (e.g., called from a UI button).
   Future<void> syncNow() async {
+    unawaited(ProfileService().sync());
     if (_isSyncing) return;
     final url = _serverUrlProvider();
     if (url.isEmpty) return;

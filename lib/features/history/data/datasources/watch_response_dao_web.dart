@@ -33,7 +33,8 @@ class WatchResponseDao {
         .where(
           (r) =>
               r.questionStatus == QuestionStatus.answered &&
-              r.syncStatus != SyncStatus.synced,
+              r.syncStatus != SyncStatus.synced &&
+              r.syncStatus != SyncStatus.rejected,
         )
         .toList()
         .reversed
@@ -57,7 +58,10 @@ class WatchResponseDao {
     });
   }
 
+  /// The first answer stands; later ones are ignored.
   Future<void> markAnswered(String id, String answerId) async {
+    final row = await getById(id);
+    if (row == null || row.questionStatus == QuestionStatus.answered) return;
     await BrowserBridge.call('db.patch', {
       'store': 'responses',
       'id': id,

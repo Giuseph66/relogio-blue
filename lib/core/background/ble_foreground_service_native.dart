@@ -907,6 +907,8 @@ class BleForegroundTaskHandler extends TaskHandler {
     final command = buildBleQuestionCommand(prompt);
     final safeId = _extractCommandId(command);
 
+    if (await _responses.isAnswerBlocked(safeId)) return;
+
     // Dedup against the DB (shared with the UI isolate).
     final now = DateTime.now();
     final recent = (await _responses.getAll()).any(
