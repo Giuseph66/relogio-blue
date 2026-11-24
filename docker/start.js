@@ -56,7 +56,7 @@ if (changed) {
   const temporary = path.join('/data', '.config.env.tmp');
   fs.writeFileSync(temporary, `${Object.entries(saved).map(([k, v]) => `${k}=${v}`).join('\n')}\n`, { mode: 0o600 });
   fs.renameSync(temporary, CONFIG);
-  console.log('[docker] Segredos gerados. Para ver a senha do admin: docker compose exec app grep ADMIN_PASSWORD /data/config.env');
+  console.log(`[docker] Segredos gerados em /data/config.env${process.env.ADMIN_PASSWORD === saved.ADMIN_PASSWORD ? '. Senha do admin: docker compose exec app grep ADMIN_PASSWORD /data/config.env' : ''}`);
 }
 if (!script) console.log(`[docker] Admin: ${process.env.ADMIN_EMAIL}`);
 

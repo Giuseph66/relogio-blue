@@ -42,6 +42,7 @@ services:
     environment:
       JOBS_BASE_URL: http://app:3001
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       INTERNAL_AUTH_TOKEN: ${INTERNAL_AUTH_TOKEN:-}
     healthcheck:
       disable: true
